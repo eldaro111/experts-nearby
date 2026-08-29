@@ -1,0 +1,60 @@
+export const FIXTURE_IDS = {
+  project: '10000000-0000-4000-8000-000000000001',
+  taskTodo: '10000000-0000-4000-8000-000000000011',
+  taskDone: '10000000-0000-4000-8000-000000000012',
+  document: '10000000-0000-4000-8000-000000000021',
+  event: '10000000-0000-4000-8000-000000000031',
+  messageRoot: '10000000-0000-4000-8000-000000000041',
+  messageReply: '10000000-0000-4000-8000-000000000042',
+  contribution: '10000000-0000-4000-8000-000000000051',
+  ownerReview: '10000000-0000-4000-8000-000000000061',
+  expertReview: '10000000-0000-4000-8000-000000000062',
+  requestAuction: '10000000-0000-4000-8000-000000000071',
+  offerAuction: '10000000-0000-4000-8000-000000000072',
+  requestBid: '10000000-0000-4000-8000-000000000081',
+  offerBid: '10000000-0000-4000-8000-000000000082',
+  offerAccessRequest: '10000000-0000-4000-8000-000000000091',
+  expertApplication: '10000000-0000-4000-8000-000000000101',
+  applicantApplication: '10000000-0000-4000-8000-000000000102',
+} as const
+
+export const TEST_USERS = [
+  {
+    key: 'owner',
+    email: 'owner.staging@experts-nearby.test',
+    displayName: 'Ольга Владелец',
+    roles: ['Заказчик', 'Инженер'],
+    skills: ['Управление проектами', 'Робототехника'],
+    city: 'Новосибирск',
+    experienceLevel: 'senior',
+  },
+  {
+    key: 'expert',
+    email: 'expert.staging@experts-nearby.test',
+    displayName: 'Илья Эксперт',
+    roles: ['Разработчик', 'Инженер'],
+    skills: ['TypeScript', 'Электроника'],
+    city: 'Томск',
+    experienceLevel: 'expert',
+  },
+  {
+    key: 'applicant',
+    email: 'applicant.staging@experts-nearby.test',
+    displayName: 'Анна Кандидат',
+    roles: ['Дизайнер'],
+    skills: ['UX', 'Прототипирование'],
+    city: 'Москва',
+    experienceLevel: 'middle',
+  },
+  {
+    key: 'outsider',
+    email: 'outsider.staging@experts-nearby.test',
+    displayName: 'Олег Посторонний',
+    roles: ['Исследователь'],
+    skills: ['Аналитика'],
+    city: 'Казань',
+    experienceLevel: 'junior',
+  },
+] as const
+
+export type TestUserKey = (typeof TEST_USERS)[number]['key']

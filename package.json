@@ -9,7 +9,10 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm run lint && npm run build"
+    "check": "npm run typecheck && npm run lint && npm run build",
+    "seed:staging": "npx --yes tsx scripts/seed-staging.ts",
+    "verify:staging": "npx --yes tsx scripts/verify-staging.ts",
+    "staging:check": "npm run seed:staging && npm run verify:staging"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
