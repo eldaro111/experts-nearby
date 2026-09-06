@@ -1,5 +1,9 @@
 'use client'
 
+import { PageLoading } from '@/components/PageState'
+
+import { PageHeader } from '@/components/PageHeader'
+
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -308,28 +312,20 @@ export default function SettingsPage() {
     router.replace('/auth')
   }
 
-  if (loading) {
-    return <div className="mx-auto max-w-6xl px-4 py-12 text-center text-gray-500">Загрузка настроек...</div>
-  }
+  if (loading) return <PageLoading />
 
   if (!user) {
-    return <div className="mx-auto max-w-6xl px-4 py-12 text-center text-gray-500">Нужно войти в систему.</div>
+    return <div className="page-shell text-center text-gray-500">Нужно войти в систему.</div>
   }
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-10">
-      <div className="mb-8">
-        <p className="mb-2 text-sm font-medium text-blue-700">Аккаунт</p>
-        <h1 className="text-3xl font-bold text-gray-900">Настройки</h1>
-        <p className="mt-2 max-w-2xl text-gray-600">
-          Управление аккаунтом, профилем, уведомлениями и видимостью экспертной анкеты.
-        </p>
-      </div>
+    <div className="page-shell">
+      <PageHeader eyebrow="Ваш аккаунт" title="Настройки" description="Профиль, уведомления, видимость и безопасность аккаунта."></PageHeader>
 
       {error && <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
 
       <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
-        <aside className="h-fit rounded-xl border bg-white p-4 shadow-sm lg:sticky lg:top-6">
+        <aside className="h-fit rounded-xl border bg-white p-4 shadow-sm lg:sticky lg:top-40">
           <nav className="space-y-1 text-sm">
             <Anchor href="#account">Аккаунт</Anchor>
             <Anchor href="#profile">Профиль</Anchor>
@@ -448,7 +444,7 @@ export default function SettingsPage() {
           </Section>
         </div>
       </div>
-    </main>
+    </div>
   )
 }
 

@@ -1,5 +1,7 @@
 'use client'
 
+import { PageLoading } from '@/components/PageState'
+
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
@@ -644,11 +646,7 @@ const handleLeaveProject = async () => {
   }
 }
 
-  if (loading) {
-    return (
-      <div className="text-center py-12 text-gray-500">Загрузка проекта...</div>
-    )
-  }
+  if (loading) return <PageLoading />
 
   if (!listing) {
     return (
@@ -670,7 +668,8 @@ const handleLeaveProject = async () => {
     .filter((ex) => !busyUserIds.includes(ex.user_id))
 
   return (
-    <div className="max-w-4xl mx-auto py-10 px-4">
+    <div className="page-shell">
+      <p className="eyebrow mb-3">Инженерный проект</p>
       <h1 className="text-3xl font-bold mb-4">{listing.title}</h1>
       <p className="text-gray-700 mb-6">{listing.description}</p>
 

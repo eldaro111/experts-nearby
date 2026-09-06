@@ -1,5 +1,7 @@
 'use client'
 
+import { PageLoading } from '@/components/PageState'
+
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
@@ -595,13 +597,11 @@ export default function AuctionDetailsPage() {
     }
   }
 
-  if (loading) {
-    return <div className="text-center py-12 text-gray-500">Загрузка аукциона...</div>
-  }
+  if (loading) return <PageLoading />
 
   if (!auction) {
     return (
-      <div className="max-w-3xl mx-auto py-12 px-4 text-center">
+      <div className="page-shell text-center">
         <h1 className="text-2xl font-bold mb-3">Аукцион не найден</h1>
         <Link href="/auctions" className="text-blue-600 underline">
           Вернуться к аукционам
@@ -611,7 +611,7 @@ export default function AuctionDetailsPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto py-10 px-4">
+    <div className="page-shell">
       <div className="mb-6">
         <Link href="/auctions" className="text-sm text-blue-600 hover:underline">
           ← К списку аукционов
@@ -620,7 +620,7 @@ export default function AuctionDetailsPage() {
 
       <div className="border rounded-xl bg-white p-6 shadow-sm mb-8">
         <div className="flex flex-wrap gap-2 mb-3">
-          <span className={`text-xs px-2 py-1 rounded-full border ${auction.type === 'offer' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+          <span className={`text-xs px-2 py-1 rounded-full border ${auction.type === 'offer' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
             {auction.type === 'offer' ? 'Проект для внедрения' : 'Заказ на разработку'}
           </span>
           <span className="text-xs px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
@@ -768,18 +768,18 @@ export default function AuctionDetailsPage() {
         )}
 
         {auction.type === 'offer' && auction.linked_listing_id && (
-          <div className="mt-6 border rounded-lg bg-purple-50 border-purple-200 p-4">
-            <h2 className="font-semibold mb-2 text-purple-900">Связанный проект</h2>
+          <div className="mt-6 border rounded-lg bg-blue-50 border-blue-200 p-4">
+            <h2 className="font-semibold mb-2 text-blue-900">Связанный проект</h2>
 
             {linkedListing ? (
               <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="font-medium text-purple-950">
+                  <div className="font-medium text-blue-950">
                     {linkedListing.title || 'Без названия'}
                   </div>
 
                   {linkedListing.description && (
-                    <div className="text-sm text-purple-900/80 mt-1 line-clamp-2">
+                    <div className="text-sm text-blue-900/80 mt-1 line-clamp-2">
                       {linkedListing.description}
                     </div>
                   )}
@@ -788,21 +788,21 @@ export default function AuctionDetailsPage() {
                 <div className="flex gap-2 shrink-0">
                   <Link
                     href={`/listings/${linkedListing.id}`}
-                    className="bg-white border border-purple-300 text-purple-800 text-sm px-3 py-2 rounded hover:bg-purple-100 transition"
+                    className="bg-white border border-blue-300 text-blue-800 text-sm px-3 py-2 rounded hover:bg-blue-100 transition"
                   >
                     Открыть обзор
                   </Link>
 
                   <Link
                     href={`/projects/${linkedListing.id}`}
-                    className="bg-purple-600 text-white text-sm px-3 py-2 rounded hover:bg-purple-700 transition"
+                    className="bg-blue-600 text-white text-sm px-3 py-2 rounded hover:bg-blue-700 transition"
                   >
                     Рабочая зона
                   </Link>
                 </div>
               </div>
             ) : (
-              <div className="text-sm text-purple-900">
+              <div className="text-sm text-blue-900">
                 Проект привязан, но недоступен текущему пользователю или был удалён.
               </div>
             )}
@@ -864,7 +864,7 @@ export default function AuctionDetailsPage() {
               <button
                 onClick={handleRequestAccess}
                 disabled={requestingAccess}
-                className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 transition disabled:opacity-60"
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition disabled:opacity-60"
               >
                 {requestingAccess ? 'Отправляем...' : 'Запросить доступ'}
               </button>

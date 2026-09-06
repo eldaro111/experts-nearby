@@ -1,5 +1,9 @@
 'use client'
 
+import { PageLoading } from '@/components/PageState'
+
+import { PageHeader } from '@/components/PageHeader'
+
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -365,42 +369,11 @@ export default function TasksPage() {
     setSavingTaskId(null)
   }
 
-  if (loading) {
-    return (
-      <main className="max-w-6xl mx-auto px-4 py-8">
-        <div className="rounded-xl border bg-white p-6 shadow-sm">Загружаем задачи...</div>
-      </main>
-    )
-  }
+  if (loading) return <PageLoading />
 
   return (
-    <main className="max-w-6xl mx-auto px-4 py-8">
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Мои задачи</h1>
-          <p className="mt-2 max-w-3xl text-gray-600">
-            Общий список задач из проектов, где ты автор или участник. Здесь удобно смотреть дедлайны,
-            просрочки и быстро менять статус своих задач.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => loadTasks(true)}
-            disabled={refreshing}
-            className="rounded-lg border px-4 py-2 text-sm text-gray-700 transition hover:bg-gray-50 disabled:opacity-60"
-          >
-            {refreshing ? 'Обновляем...' : 'Обновить'}
-          </button>
-          <Link
-            href="/dashboard"
-            className="rounded-lg border px-4 py-2 text-sm text-gray-700 transition hover:bg-gray-50"
-          >
-            Дашборд
-          </Link>
-        </div>
-      </div>
+    <div className="page-shell">
+      <PageHeader eyebrow="Рабочий центр" title="Мои задачи" description="Задачи из доступных проектов: исполнители, сроки и статусы."><button type="button" onClick={() => loadTasks(true)} disabled={refreshing} className="action-secondary disabled:opacity-60">{refreshing ? 'Обновляем…' : 'Обновить'}</button><Link href="/dashboard" className="action-secondary">Рабочий центр</Link></PageHeader>
 
       {errorText && (
         <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -575,6 +548,6 @@ export default function TasksPage() {
           })}
         </section>
       )}
-    </main>
+    </div>
   )
 }

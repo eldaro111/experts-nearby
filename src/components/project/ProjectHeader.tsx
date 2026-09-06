@@ -1,5 +1,6 @@
 'use client'
 
+import { ArrowLeft } from 'lucide-react'
 import type { Listing } from './types'
 
 interface ProjectHeaderProps {
@@ -38,17 +39,18 @@ export function ProjectHeader({
 }: ProjectHeaderProps) {
   return (
     <>
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+      <div className="page-heading border-b pb-7">
         <div>
+          <p className="eyebrow mb-3">Командный проект</p>
           <h1 className="text-3xl font-bold">{listing.title}</h1>
           <p className="text-gray-600 mt-2">{listing.description}</p>
         </div>
 
         <button
           onClick={onBackToOverview}
-          className="bg-gray-200 text-gray-800 px-4 py-2 rounded hover:bg-gray-300 transition"
+          className="action-secondary shrink-0"
         >
-          К обзору проекта
+          <ArrowLeft size={17} />К обзору проекта
         </button>
       </div>
 
@@ -71,6 +73,7 @@ export function ProjectHeader({
             <div
               className="h-4 rounded-full bg-gray-100 border overflow-hidden"
               role="progressbar"
+              aria-label="Прогресс проекта"
               aria-valuenow={projectProgress}
               aria-valuemin={0}
               aria-valuemax={100}
@@ -144,6 +147,7 @@ export function ProjectHeader({
               <div className="mt-3 space-y-2">
                 <input
                   type="datetime-local"
+                  aria-label="Дедлайн проекта"
                   value={projectDeadline}
                   onChange={(e) => onProjectDeadlineChange(e.target.value)}
                   className="border rounded p-2 w-full bg-white"

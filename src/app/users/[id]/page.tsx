@@ -1,5 +1,7 @@
 'use client'
 
+import { PageLoading } from '@/components/PageState'
+
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
@@ -153,16 +155,16 @@ export default function UserProfilePage() {
   const skills = useMemo(() => toList(profile?.skills), [profile])
   const portfolioLinks = useMemo(() => toList(profile?.portfolio_links), [profile])
 
-  if (loading) return <div className="text-center py-12 text-gray-500">Загрузка профиля...</div>
+  if (loading) return <PageLoading />
   if (!profile) return <div className="text-center py-12 text-gray-500">Профиль скрыт или недоступен.</div>
 
   return (
-    <div className="max-w-4xl mx-auto py-10 px-4">
+    <div className="page-shell">
       <div className="mb-6"><Link href="/experts" className="text-sm text-blue-600 hover:underline">← Назад к экспертам</Link></div>
       <div className="bg-white shadow-sm border rounded-xl p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between mb-6">
-          <div><h1 className="text-3xl font-bold">{profile.display_name || 'Без имени'}</h1><p className="text-gray-600 mt-2">{profile.city || 'Город не указан'} · {profile.work_format ? workFormatLabel[profile.work_format] : 'формат не указан'} · {profile.experience_level ? experienceLabel[profile.experience_level] : 'уровень не указан'}</p><p className="text-gray-500 text-sm mt-1">{profile.timezone || 'Часовой пояс не указан'} · {profile.availability_hours ?? 0} ч/нед{profile.hourly_rate ? ` · ${profile.hourly_rate} ₽/час` : ''}</p></div>
-          {currentUser ? ownedProjects.length > 0 ? <div className="border rounded-lg p-3 bg-gray-50 w-full md:w-80"><div className="text-sm font-medium mb-2">Пригласить в проект</div><div className="flex flex-col gap-2"><select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} className="border rounded-lg px-3 py-2 text-sm bg-white"><option value="">Выбрать проект...</option>{ownedProjects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select><button onClick={handleInvite} disabled={inviting} className="bg-green-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-green-700 transition disabled:opacity-60">{inviting ? 'Приглашаем...' : 'Пригласить'}</button></div></div> : <Link href="/listings/new" className="text-sm text-blue-600 hover:underline">Создать проект, чтобы пригласить эксперта</Link> : <Link href="/auth" className="text-sm text-blue-600 hover:underline">Войдите, чтобы пригласить эксперта</Link>}
+          <div><p className="eyebrow mb-3">Эксперт платформы</p><h1 className="text-3xl font-bold">{profile.display_name || 'Без имени'}</h1><p className="text-gray-600 mt-2">{profile.city || 'Город не указан'} · {profile.work_format ? workFormatLabel[profile.work_format] : 'формат не указан'} · {profile.experience_level ? experienceLabel[profile.experience_level] : 'уровень не указан'}</p><p className="text-gray-500 text-sm mt-1">{profile.timezone || 'Часовой пояс не указан'} · {profile.availability_hours ?? 0} ч/нед{profile.hourly_rate ? ` · ${profile.hourly_rate} ₽/час` : ''}</p></div>
+          {currentUser ? ownedProjects.length > 0 ? <div className="border rounded-lg p-3 bg-gray-50 w-full md:w-80"><div className="text-sm font-medium mb-2">Пригласить в проект</div><div className="flex flex-col gap-2"><select aria-label="Проект для приглашения" value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} className="border rounded-lg px-3 py-2 text-sm bg-white"><option value="">Выбрать проект...</option>{ownedProjects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select><button onClick={handleInvite} disabled={inviting} className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-60">{inviting ? 'Приглашаем...' : 'Пригласить'}</button></div></div> : <Link href="/listings/new" className="text-sm text-blue-600 hover:underline">Создать проект, чтобы пригласить эксперта</Link> : <Link href="/auth" className="text-sm text-blue-600 hover:underline">Войдите, чтобы пригласить эксперта</Link>}
         </div>
         {profile.about && <div className="mb-6"><h2 className="font-semibold mb-2">О себе</h2><p className="text-gray-700 whitespace-pre-line">{profile.about}</p></div>}
         <div className="grid md:grid-cols-2 gap-5"><TagBlock title="Роли" items={roles} tone="blue" /><TagBlock title="Навыки" items={skills} /></div>

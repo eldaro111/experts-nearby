@@ -1,5 +1,7 @@
 'use client'
 
+import { FormField } from '@/components/FormField'
+
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
@@ -84,30 +86,30 @@ export default function EditListingPage() {
     )
 
   return (
-    <div className="max-w-3xl mx-auto py-12 px-4">
+    <div className="page-shell form-shell">
       <h1 className="text-3xl font-bold mb-6 text-center">
         Редактирование проекта
       </h1>
 
-      <div className="space-y-4">
-        <input
+      <div className="space-y-5 rounded-2xl border bg-white p-6">
+        <FormField label="Название проекта"><input
           type="text"
           value={listing.title || ''}
           onChange={(e) => setListing({ ...listing, title: e.target.value })}
           placeholder="Название проекта"
           className="border rounded p-2 w-full"
-        />
+        /></FormField>
 
-        <textarea
+        <FormField label="Описание проекта"><textarea
           value={listing.description || ''}
           onChange={(e) =>
             setListing({ ...listing, description: e.target.value })
           }
           placeholder="Описание проекта"
           className="border rounded p-2 w-full h-32"
-        />
+        /></FormField>
 
-        <input
+        <FormField label="Роли в команде"><input
           type="text"
           value={listing.roles_needed || ''}
           onChange={(e) =>
@@ -115,25 +117,25 @@ export default function EditListingPage() {
           }
           placeholder="Роли, требуемые в проекте"
           className="border rounded p-2 w-full"
-        />
+        /></FormField>
 
-        <input
+        <FormField label="Нужные навыки"><input
           type="text"
           value={listing.skills || ''}
           onChange={(e) => setListing({ ...listing, skills: e.target.value })}
           placeholder="Навыки"
           className="border rounded p-2 w-full"
-        />
+        /></FormField>
 
-        <input
+        <FormField label="Часовой пояс"><input
           type="text"
           value={listing.timezone || ''}
           onChange={(e) => setListing({ ...listing, timezone: e.target.value })}
           placeholder="Часовой пояс"
           className="border rounded p-2 w-full"
-        />
+        /></FormField>
 
-        <select
+        <FormField label="Видимость проекта"><select
           value={listing.visibility || 'public'}
           onChange={(e) =>
             setListing({ ...listing, visibility: e.target.value })
@@ -142,14 +144,14 @@ export default function EditListingPage() {
         >
           <option value="public">Публичный</option>
           <option value="private">Приватный</option>
-        </select>
+        </select></FormField>
 
         <button
           onClick={handleSave}
           disabled={saving}
           className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition w-full"
         >
-          {saving ? 'Сохраняем...' : '💾 Сохранить изменения'}
+          {saving ? 'Сохраняем...' : 'Сохранить изменения'}
         </button>
       </div>
     </div>

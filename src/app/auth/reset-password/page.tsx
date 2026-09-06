@@ -82,7 +82,7 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <main className="mx-auto max-w-md px-4 py-16">
+    <div className="recovery-shell mx-auto max-w-md px-4 py-16">
       <section className="rounded-xl border bg-white p-6 shadow-sm">
         <p className="mb-2 text-sm font-medium text-blue-700">
           Восстановление доступа
@@ -159,6 +159,6 @@ export default function ResetPasswordPage() {
           </Link>
         </div>
       </section>
-    </main>
+    </div>
   )
 }

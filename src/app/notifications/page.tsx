@@ -1,5 +1,9 @@
 'use client'
 
+import { PageLoading } from '@/components/PageState'
+
+import { PageHeader } from '@/components/PageHeader'
+
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -356,54 +360,11 @@ export default function NotificationsPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <main className="mx-auto max-w-6xl px-4 py-8">
-        <div className="rounded-xl border bg-white p-8 text-center text-gray-600 shadow-sm">
-          Загружаю уведомления...
-        </div>
-      </main>
-    )
-  }
+  if (loading) return <PageLoading />
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8">
-      <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <p className="mb-2 text-sm font-medium text-blue-700">Рабочий центр</p>
-          <h1 className="text-3xl font-bold text-gray-900">Центр уведомлений</h1>
-          <p className="mt-2 max-w-2xl text-gray-600">
-            Все события по проектам, задачам, аукционам, файлам, отзывам и приглашениям в одном месте.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-3">
-          <Link
-            href="/settings#notifications"
-            className="rounded-lg border bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50"
-          >
-            Настроить уведомления
-          </Link>
-
-          <button
-            type="button"
-            onClick={markAllAsRead}
-            disabled={unreadCount === 0 || markingAll || Boolean(pendingNotificationId)}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 disabled:bg-gray-300"
-          >
-            Прочитать всё
-          </button>
-
-          <button
-            type="button"
-            onClick={() => loadNotifications(true)}
-            disabled={refreshing}
-            className="rounded-lg border bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:opacity-60"
-          >
-            {refreshing ? 'Обновляем...' : 'Обновить'}
-          </button>
-        </div>
-      </div>
+    <div className="page-shell">
+      <PageHeader eyebrow="Рабочий центр" title="Уведомления" description="Приглашения, обновления задач и события ваших проектов."><Link href="/settings#notifications" className="action-secondary">Настроить</Link><button type="button" onClick={markAllAsRead} disabled={unreadCount === 0 || markingAll || Boolean(pendingNotificationId)} className="action-primary disabled:opacity-50">{markingAll ? 'Сохраняем…' : 'Прочитать всё'}</button><button type="button" onClick={() => loadNotifications(true)} disabled={refreshing} className="action-secondary disabled:opacity-50">{refreshing ? 'Обновляем…' : 'Обновить'}</button></PageHeader>
 
       {error && (
         <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -596,6 +557,6 @@ export default function NotificationsPage() {
           </div>
         )}
       </section>
-    </main>
+    </div>
   )
 }

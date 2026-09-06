@@ -1,5 +1,7 @@
 'use client'
 
+import { PageLoading } from '@/components/PageState'
+
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -260,16 +262,14 @@ export default function MyAuctionsPage() {
     }
   }
 
-  if (loading) {
-    return <div className="text-center py-12 text-gray-500">Загрузка моих аукционов...</div>
-  }
+  if (loading) return <PageLoading />
 
   if (!currentUserId) {
     return null
   }
 
   return (
-    <div className="max-w-6xl mx-auto py-10 px-4">
+    <div className="page-shell">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold">Мои аукционы</h1>

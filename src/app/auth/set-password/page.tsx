@@ -205,7 +205,7 @@ function SetPasswordContent() {
 
   if (accessState === 'denied') {
     return (
-      <main className="mx-auto max-w-md px-4 py-16">
+      <div className="recovery-shell mx-auto max-w-md px-4 py-16">
         <section className="rounded-xl border border-orange-200 bg-orange-50 p-6 text-center shadow-sm">
           <h1 className="text-xl font-semibold text-gray-900">
             Ссылка недействительна
@@ -232,12 +232,12 @@ function SetPasswordContent() {
             </Link>
           </div>
         </section>
-      </main>
+      </div>
     )
   }
 
   return (
-    <main className="mx-auto max-w-sm px-4 py-16">
+    <div className="recovery-shell mx-auto max-w-sm px-4 py-16">
       <h1 className="mb-6 text-center text-2xl font-bold">
         Придумайте новый пароль
       </h1>
@@ -293,6 +293,6 @@ function SetPasswordContent() {
           {loading ? 'Сохраняем...' : 'Сохранить и продолжить'}
         </button>
       </form>
-    </main>
+    </div>
   )
 }

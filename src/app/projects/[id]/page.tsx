@@ -1,5 +1,7 @@
 'use client'
 
+import { PageLoading } from '@/components/PageState'
+
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
@@ -268,13 +270,7 @@ export default function ProjectWorkspacePage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="text-center py-12 text-gray-500">
-        Загрузка рабочей зоны...
-      </div>
-    )
-  }
+  if (loading) return <PageLoading />
 
   if (!listing) {
     return (
@@ -286,7 +282,7 @@ export default function ProjectWorkspacePage() {
 
   if (!hasAccess) {
     return (
-      <div className="max-w-3xl mx-auto py-12 px-4">
+      <div className="page-shell">
         <h1 className="text-3xl font-bold mb-4 text-center">
           Рабочая зона проекта
         </h1>
@@ -325,7 +321,7 @@ export default function ProjectWorkspacePage() {
     projectProgress < 100
 
   return (
-    <div id="project-top" className="max-w-7xl mx-auto py-10 px-4">
+    <div id="project-top" className="page-shell">
       <ProjectHeader
         listing={listing}
         isAuthor={isAuthor}
@@ -350,7 +346,7 @@ export default function ProjectWorkspacePage() {
           overdueTasks={overdueTasks}
         />
 
-        <main className="min-w-0 space-y-10">
+        <div className="min-w-0 space-y-10">
           <section id="plan" className="scroll-mt-24 space-y-10">
             <ProjectTasks
               projectId={id}
@@ -411,7 +407,7 @@ export default function ProjectWorkspacePage() {
           <section id="activity" className="scroll-mt-24">
             <ProjectActivity projectId={id} />
           </section>
-        </main>
+        </div>
       </div>
 
       <FloatingProjectChat

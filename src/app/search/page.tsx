@@ -1,5 +1,9 @@
 'use client'
 
+import { PageLoading } from '@/components/PageState'
+
+import { PageHeader } from '@/components/PageHeader'
+
 import Link from 'next/link'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
@@ -591,33 +595,11 @@ export default function SearchPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <main className="mx-auto max-w-6xl px-4 py-8">
-        <div className="rounded-xl border bg-white p-8 text-center text-gray-600 shadow-sm">Загружаю поиск...</div>
-      </main>
-    )
-  }
+  if (loading) return <PageLoading />
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8">
-      <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <p className="mb-2 text-sm font-medium text-blue-700">Рабочий центр</p>
-          <h1 className="text-3xl font-bold text-gray-900">Глобальный поиск</h1>
-          <p className="mt-2 max-w-2xl text-gray-600">
-            Ищи проекты, задачи, файлы, аукционы, экспертов и уведомления в одном месте.
-          </p>
-        </div>
-
-        <button
-          onClick={() => loadSearchData(true)}
-          disabled={refreshing}
-          className="rounded-lg border bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:opacity-60"
-        >
-          {refreshing ? 'Обновляем...' : 'Обновить'}
-        </button>
-      </div>
+    <div className="page-shell">
+      <PageHeader eyebrow="По всей платформе" title="Найдите нужное" description="Проекты, специалисты, задачи и материалы — одним запросом."><button onClick={() => loadSearchData(true)} disabled={refreshing} className="action-secondary disabled:opacity-60">{refreshing ? 'Обновляем…' : 'Обновить'}</button></PageHeader>
 
       {errorText && (
         <div className="mb-6 whitespace-pre-line rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800">
@@ -695,6 +677,6 @@ export default function SearchPage() {
           ))}
         </div>
       )}
-    </main>
+    </div>
   )
 }

@@ -167,7 +167,7 @@ export default function AuthCallbackPage() {
 
   if (error) {
     return (
-      <main className="mx-auto max-w-md px-4 py-16">
+      <div className="recovery-shell mx-auto max-w-md px-4 py-16">
         <section className="rounded-xl border border-red-200 bg-red-50 p-6 text-center shadow-sm">
           <h1 className="text-xl font-semibold text-gray-900">
             Не удалось открыть ссылку
@@ -193,7 +193,7 @@ export default function AuthCallbackPage() {
             </Link>
           </div>
         </section>
-      </main>
+      </div>
     )
   }
 

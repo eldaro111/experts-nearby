@@ -1,5 +1,11 @@
 'use client'
 
+import { PageLoading } from '@/components/PageState'
+
+import { FormField } from '@/components/FormField'
+
+import { PageHeader } from '@/components/PageHeader'
+
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -319,9 +325,7 @@ export default function ProfilePage() {
   const skills = useMemo(() => toList(profile?.skills), [profile])
   const portfolioLinks = useMemo(() => toList(profile?.portfolio_links), [profile])
 
-  if (loading) {
-    return <div className="text-center py-12 text-gray-500">Загрузка профиля...</div>
-  }
+  if (loading) return <PageLoading />
 
   if (!user) {
     return (
@@ -354,39 +358,39 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto py-10 px-4">
-      <h1 className="text-3xl font-bold text-center mb-6">Мой профиль</h1>
+    <div className="page-shell">
+      <PageHeader eyebrow="Ваш экспертный профиль" title="Мой профиль" description="Опыт, навыки, проекты и приглашения к совместной работе." />
 
       <div className="bg-white shadow-sm border rounded-xl p-6 mb-8">
         {editMode ? (
           <>
             <div className="grid md:grid-cols-2 gap-4">
-              <input type="text" placeholder="Имя / Никнейм" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="border rounded-lg p-2 w-full" />
-              <input type="text" placeholder="Город" value={city} onChange={(e) => setCity(e.target.value)} className="border rounded-lg p-2 w-full" />
-              <input type="text" placeholder="Часовой пояс" value={timezone} onChange={(e) => setTimezone(e.target.value)} className="border rounded-lg p-2 w-full" />
-              <input type="number" placeholder="Доступность, часов в неделю" value={availabilityHours} onChange={(e) => setAvailabilityHours(e.target.value)} className="border rounded-lg p-2 w-full" />
+              <FormField label="Имя и фамилия"><input type="text" placeholder="Имя / Никнейм" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="border rounded-lg p-2 w-full" /></FormField>
+              <FormField label="Город"><input type="text" placeholder="Город" value={city} onChange={(e) => setCity(e.target.value)} className="border rounded-lg p-2 w-full" /></FormField>
+              <FormField label="Часовой пояс"><input type="text" placeholder="Часовой пояс" value={timezone} onChange={(e) => setTimezone(e.target.value)} className="border rounded-lg p-2 w-full" /></FormField>
+              <FormField label="Доступность, часов в неделю"><input type="number" placeholder="Доступность, часов в неделю" value={availabilityHours} onChange={(e) => setAvailabilityHours(e.target.value)} className="border rounded-lg p-2 w-full" /></FormField>
 
-              <select value={workFormat} onChange={(e) => setWorkFormat(e.target.value)} className="border rounded-lg p-2 w-full bg-white">
+              <FormField label="Формат работы"><select value={workFormat} onChange={(e) => setWorkFormat(e.target.value)} className="border rounded-lg p-2 w-full bg-white">
                 <option value="">Формат работы не указан</option>
                 <option value="remote">Удалённо</option>
                 <option value="onsite">Очно</option>
                 <option value="hybrid">Гибрид</option>
-              </select>
+              </select></FormField>
 
-              <select value={experienceLevel} onChange={(e) => setExperienceLevel(e.target.value)} className="border rounded-lg p-2 w-full bg-white">
+              <FormField label="Уровень опыта"><select value={experienceLevel} onChange={(e) => setExperienceLevel(e.target.value)} className="border rounded-lg p-2 w-full bg-white">
                 <option value="">Уровень не указан</option>
                 <option value="junior">Junior</option>
                 <option value="middle">Middle</option>
                 <option value="senior">Senior</option>
                 <option value="expert">Expert</option>
-              </select>
+              </select></FormField>
 
-              <input type="number" placeholder="Ставка, ₽/час" value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} className="border rounded-lg p-2 w-full" />
-              <input type="text" placeholder="Роли через запятую" value={rolesText} onChange={(e) => setRolesText(e.target.value)} className="border rounded-lg p-2 w-full" />
-              <input type="text" placeholder="Навыки через запятую" value={skillsText} onChange={(e) => setSkillsText(e.target.value)} className="border rounded-lg p-2 w-full md:col-span-2" />
-              <textarea placeholder="О себе: опыт, специализация, чем полезен проектам" value={about} onChange={(e) => setAbout(e.target.value)} className="border rounded-lg p-2 w-full min-h-28 md:col-span-2" />
-              <textarea placeholder={'Ссылки, по одной на строку. Например:\nGitHub: github.com/name\nTelegram: t.me/name'} value={linksText} onChange={(e) => setLinksText(e.target.value)} className="border rounded-lg p-2 w-full min-h-24 md:col-span-2" />
-              <textarea placeholder={'Портфолио, по одной ссылке на строку'} value={portfolioLinksText} onChange={(e) => setPortfolioLinksText(e.target.value)} className="border rounded-lg p-2 w-full min-h-24 md:col-span-2" />
+              <FormField label="Ставка, ₽ / час"><input type="number" placeholder="Ставка, ₽/час" value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} className="border rounded-lg p-2 w-full" /></FormField>
+              <FormField label="Роли в проектах"><input type="text" placeholder="Роли через запятую" value={rolesText} onChange={(e) => setRolesText(e.target.value)} className="border rounded-lg p-2 w-full" /></FormField>
+              <FormField label="Навыки" className="md:col-span-2"><input type="text" placeholder="Навыки через запятую" value={skillsText} onChange={(e) => setSkillsText(e.target.value)} className="border rounded-lg p-2 w-full md:col-span-2" /></FormField>
+              <FormField label="О себе" className="md:col-span-2"><textarea placeholder="О себе: опыт, специализация, чем полезен проектам" value={about} onChange={(e) => setAbout(e.target.value)} className="border rounded-lg p-2 w-full min-h-28 md:col-span-2" /></FormField>
+              <FormField label="Контакты и ссылки" className="md:col-span-2"><textarea placeholder={'Ссылки, по одной на строку. Например:\nGitHub: github.com/name\nTelegram: t.me/name'} value={linksText} onChange={(e) => setLinksText(e.target.value)} className="border rounded-lg p-2 w-full min-h-24 md:col-span-2" /></FormField>
+              <FormField label="Портфолио" className="md:col-span-2"><textarea placeholder={'Портфолио, по одной ссылке на строку'} value={portfolioLinksText} onChange={(e) => setPortfolioLinksText(e.target.value)} className="border rounded-lg p-2 w-full min-h-24 md:col-span-2" /></FormField>
             </div>
 
             <div className="flex justify-end gap-3 mt-4">

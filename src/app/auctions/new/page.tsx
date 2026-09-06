@@ -1,5 +1,9 @@
 'use client'
 
+import { FormField } from '@/components/FormField'
+
+import { PageHeader } from '@/components/PageHeader'
+
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
@@ -204,11 +208,8 @@ export default function NewAuctionPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto py-10 px-4">
-      <h1 className="text-3xl font-bold mb-2">Создать аукцион</h1>
-      <p className="text-gray-600 mb-8">
-        Выберите тип: заказ на разработку или проект для внедрения/лицензирования.
-      </p>
+    <div className="page-shell form-shell">
+      <PageHeader eyebrow="Новый аукцион" title="Предложите задачу или решение" description="Разместите заказ на разработку или готовый проект для внедрения." />
 
       <form onSubmit={handleCreateAuction} className="space-y-6">
         <div className="border rounded-xl bg-white p-5 shadow-sm">
@@ -218,6 +219,7 @@ export default function NewAuctionPage() {
             <button
               type="button"
               onClick={() => setType('request')}
+              aria-pressed={type === 'request'}
               className={`border rounded-lg p-4 text-left transition ${type === 'request' ? 'border-blue-600 bg-blue-50' : 'bg-white hover:bg-gray-50'}`}
             >
               <div className="font-semibold">Заказ на разработку</div>
@@ -229,7 +231,8 @@ export default function NewAuctionPage() {
             <button
               type="button"
               onClick={() => setType('offer')}
-              className={`border rounded-lg p-4 text-left transition ${type === 'offer' ? 'border-purple-600 bg-purple-50' : 'bg-white hover:bg-gray-50'}`}
+              aria-pressed={type === 'offer'}
+              className={`border rounded-lg p-4 text-left transition ${type === 'offer' ? 'border-blue-600 bg-blue-50' : 'bg-white hover:bg-gray-50'}`}
             >
               <div className="font-semibold">Проект для внедрения</div>
               <div className="text-sm text-gray-600 mt-1">
@@ -242,73 +245,73 @@ export default function NewAuctionPage() {
         <div className="border rounded-xl bg-white p-5 shadow-sm space-y-4">
           <h2 className="text-xl font-semibold">Публичная часть</h2>
 
-          <input
+          <FormField label="Название аукциона"><input
             type="text"
             placeholder="Название"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="border rounded p-2 w-full"
             required
-          />
+          /></FormField>
 
-          <input
+          <FormField label="Краткое описание"><input
             type="text"
             placeholder="Краткое описание"
             value={publicSummary}
             onChange={(e) => setPublicSummary(e.target.value)}
             className="border rounded p-2 w-full"
-          />
+          /></FormField>
 
-          <textarea
+          <FormField label="Публичное описание"><textarea
             placeholder="Публичное описание"
             value={publicDescription}
             onChange={(e) => setPublicDescription(e.target.value)}
             className="border rounded p-2 w-full min-h-[140px]"
-          />
+          /></FormField>
 
           <div className="grid md:grid-cols-2 gap-3">
-            <input
+            <FormField label="Категория"><input
               type="text"
               placeholder="Категория: CAD, робототехника, медицина..."
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               className="border rounded p-2 w-full"
-            />
+            /></FormField>
 
-            <input
+            <FormField label="Валюта"><input
               type="text"
               placeholder="Валюта"
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
               className="border rounded p-2 w-full"
-            />
+            /></FormField>
           </div>
 
           <div className="grid md:grid-cols-3 gap-3">
-            <input
+            <FormField label="Сумма от"><input
               type="number"
               min="0"
               placeholder={isOffer ? 'Ожидаемая сумма от' : 'Бюджет от'}
               value={budgetMin}
               onChange={(e) => setBudgetMin(e.target.value)}
               className="border rounded p-2 w-full"
-            />
+            /></FormField>
 
-            <input
+            <FormField label="Сумма до"><input
               type="number"
               min="0"
               placeholder={isOffer ? 'Ожидаемая сумма до' : 'Бюджет до'}
               value={budgetMax}
               onChange={(e) => setBudgetMax(e.target.value)}
               className="border rounded p-2 w-full"
-            />
+            /></FormField>
 
-            <input
+            <FormField label="Приём предложений до"><input
               type="datetime-local"
               value={endsAt}
               onChange={(e) => setEndsAt(e.target.value)}
               className="border rounded p-2 w-full"
-            />
+            /></FormField>
           </div>
         </div>
 
@@ -316,65 +319,65 @@ export default function NewAuctionPage() {
           <div className="border rounded-xl bg-white p-5 shadow-sm space-y-4">
             <h2 className="text-xl font-semibold">Заказ на разработку</h2>
 
-            <input
+            <FormField label="Нужные роли"><input
               type="text"
               placeholder="Нужные роли через запятую"
               value={requiredRoles}
               onChange={(e) => setRequiredRoles(e.target.value)}
               className="border rounded p-2 w-full"
-            />
+            /></FormField>
 
-            <input
+            <FormField label="Нужные навыки"><input
               type="text"
               placeholder="Нужные навыки через запятую"
               value={requiredSkills}
               onChange={(e) => setRequiredSkills(e.target.value)}
               className="border rounded p-2 w-full"
-            />
+            /></FormField>
 
-            <textarea
+            <FormField label="Ожидаемый результат"><textarea
               placeholder="Ожидаемый результат"
               value={expectedResult}
               onChange={(e) => setExpectedResult(e.target.value)}
               className="border rounded p-2 w-full min-h-[100px]"
-            />
+            /></FormField>
 
-            <textarea
+            <FormField label="Критерии выбора"><textarea
               placeholder="Критерии выбора исполнителя / команды"
               value={selectionCriteria}
               onChange={(e) => setSelectionCriteria(e.target.value)}
               className="border rounded p-2 w-full min-h-[100px]"
-            />
+            /></FormField>
           </div>
         ) : (
           <div className="border rounded-xl bg-white p-5 shadow-sm space-y-4">
             <h2 className="text-xl font-semibold">Проект для внедрения</h2>
 
             <div className="grid md:grid-cols-2 gap-3">
-              <input
+              <FormField label="Тип сделки"><input
                 type="text"
                 placeholder="Тип сделки: license, pilot, partnership..."
                 value={dealType}
                 onChange={(e) => setDealType(e.target.value)}
                 className="border rounded p-2 w-full"
-              />
+              /></FormField>
 
-              <input
+              <FormField label="Готовность проекта"><input
                 type="text"
                 placeholder="Готовность: idea, prototype, mvp, production"
                 value={readinessLevel}
                 onChange={(e) => setReadinessLevel(e.target.value)}
                 className="border rounded p-2 w-full"
-              />
+              /></FormField>
             </div>
 
-            <input
+            <FormField label="Права на разработку"><input
               type="text"
               placeholder="IP-режим / права"
               value={ipMode}
               onChange={(e) => setIpMode(e.target.value)}
               className="border rounded p-2 w-full"
-            />
+            /></FormField>
 
             <div>
               <label className="block text-sm text-gray-600 mb-1">
@@ -382,6 +385,7 @@ export default function NewAuctionPage() {
               </label>
 
               <select
+                aria-label="Связанный проект"
                 value={linkedListingId}
                 onChange={(e) => setLinkedListingId(e.target.value)}
                 className="border rounded p-2 w-full bg-white"
@@ -400,12 +404,12 @@ export default function NewAuctionPage() {
               </p>
             </div>
 
-            <textarea
+            <FormField label="Требования к партнёру"><textarea
               placeholder="Что требуется от производства / партнёра"
               value={implementationNeeds}
               onChange={(e) => setImplementationNeeds(e.target.value)}
               className="border rounded p-2 w-full min-h-[100px]"
-            />
+            /></FormField>
 
             <label className="flex items-center gap-2 text-sm text-gray-700">
               <input
@@ -422,19 +426,19 @@ export default function NewAuctionPage() {
                 Эти данные будут лежать отдельно в auction_protected и не должны попадать в публичный fetch.
               </p>
 
-              <textarea
+              <FormField label="Закрытое описание"><textarea
                 placeholder="Закрытое описание: детали технологии, материалы, риски, ссылки на приватные документы"
                 value={protectedDescription}
                 onChange={(e) => setProtectedDescription(e.target.value)}
                 className="border rounded p-2 w-full min-h-[140px] bg-white"
-              />
+              /></FormField>
 
-              <textarea
+              <FormField label="Закрытые ссылки"><textarea
                 placeholder="Закрытые ссылки, каждая с новой строки"
                 value={protectedLinks}
                 onChange={(e) => setProtectedLinks(e.target.value)}
                 className="border rounded p-2 w-full min-h-[90px] bg-white"
-              />
+              /></FormField>
             </div>
           </div>
         )}

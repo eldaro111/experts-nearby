@@ -1,5 +1,9 @@
 'use client'
 
+import { PageLoading } from '@/components/PageState'
+
+import { PageHeader } from '@/components/PageHeader'
+
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
@@ -262,19 +266,11 @@ export default function FilesPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <main className="mx-auto max-w-6xl px-4 py-8">
-        <div className="rounded-xl border bg-white p-8 text-center text-gray-600 shadow-sm">
-          Загружаю файлы...
-        </div>
-      </main>
-    )
-  }
+  if (loading) return <PageLoading />
 
   if (!userId) {
     return (
-      <main className="mx-auto max-w-3xl px-4 py-8">
+      <div className="page-shell">
         <div className="rounded-xl border bg-white p-8 text-center shadow-sm">
           <h1 className="mb-2 text-2xl font-bold text-gray-900">Файлы проектов</h1>
           <p className="mb-4 text-gray-600">Чтобы видеть материалы проектов, нужно войти.</p>
@@ -285,28 +281,13 @@ export default function FilesPage() {
             Войти
           </Link>
         </div>
-      </main>
+      </div>
     )
   }
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8">
-      <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <p className="mb-2 text-sm font-medium text-blue-700">Материалы</p>
-          <h1 className="text-3xl font-bold text-gray-900">Файлы проектов</h1>
-          <p className="mt-2 max-w-2xl text-gray-600">
-            Все файлы из проектов, где ты автор или участник. Можно быстро найти документ, чертёж, CAD, код, отчёт или архив.
-          </p>
-        </div>
-
-        <Link
-          href="/dashboard"
-          className="rounded-lg border bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50"
-        >
-          В дашборд
-        </Link>
-      </div>
+    <div className="page-shell">
+      <PageHeader eyebrow="Рабочий центр" title="Файлы проектов" description="Чертежи, документы, код и другие материалы из доступных вам проектов."><Link href="/dashboard" className="action-secondary">Рабочий центр</Link></PageHeader>
 
       {error && (
         <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -468,6 +449,6 @@ export default function FilesPage() {
           })}
         </div>
       )}
-    </main>
+    </div>
   )
 }

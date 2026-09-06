@@ -1,5 +1,9 @@
 'use client'
 
+import { PageLoading } from '@/components/PageState'
+
+import { PageHeader } from '@/components/PageHeader'
+
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -176,8 +180,8 @@ function Card({
   children: React.ReactNode
 }) {
   return (
-    <section className="rounded-xl border bg-white p-5 shadow-sm">
-      <div className="mb-4 flex items-center justify-between gap-3">
+    <section className="rounded-2xl border bg-white p-6 shadow-sm">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b pb-4">
         <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
         {action}
       </div>
@@ -476,45 +480,11 @@ export default function DashboardPage() {
       .slice(0, 6)
   }, [dashboard])
 
-  if (loading) {
-    return (
-      <main className="mx-auto max-w-7xl px-4 py-8">
-        <div className="rounded-2xl border bg-white p-10 text-center text-slate-600 shadow-sm">
-          Загружаю рабочий центр...
-        </div>
-      </main>
-    )
-  }
+  if (loading) return <PageLoading />
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8">
-      <section className="overflow-hidden rounded-3xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-slate-50 shadow-sm">
-        <div className="flex flex-col gap-7 px-6 py-8 md:px-9 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.14em] text-blue-700">Личный рабочий центр</p>
-            <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 md:text-4xl">Что требует внимания сегодня</h1>
-            <p className="mt-3 max-w-2xl leading-7 text-slate-600">
-              Проекты, задачи, сроки, аукционы и последние события собраны в одном месте.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <Link href="/listings/new" className="rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-800">
-              Создать проект
-            </Link>
-            <Link href="/auctions/new" className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 hover:bg-blue-50">
-              Создать аукцион
-            </Link>
-            <button
-              onClick={() => loadDashboard(true)}
-              disabled={refreshing}
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-            >
-              {refreshing ? 'Обновляем...' : 'Обновить'}
-            </button>
-          </div>
-        </div>
-      </section>
+    <div className="page-shell">
+      <PageHeader eyebrow="Личный центр" title="Рабочий центр" description="Проекты, задачи и ближайшие сроки. Всё, что требует вашего внимания."><Link href="/listings/new" className="action-primary">Создать проект</Link><Link href="/auctions/new" className="action-secondary">Создать аукцион</Link><button onClick={() => loadDashboard(true)} disabled={refreshing} className="action-secondary disabled:opacity-60">{refreshing ? 'Обновляем…' : 'Обновить'}</button></PageHeader>
 
       {errors.length > 0 && (
         <div className="mt-6 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-900">
@@ -550,7 +520,7 @@ export default function DashboardPage() {
         <div className="space-y-6">
           <Card title="Активные задачи" action={<Link href="/tasks" className="text-sm font-semibold text-blue-700 hover:underline">Все задачи</Link>}>
             {dashboard.tasks.length === 0 ? (
-              <EmptyState>Активных задач на тебя сейчас нет.</EmptyState>
+              <EmptyState>Активных задач пока нет.</EmptyState>
             ) : (
               <div className="divide-y rounded-xl border">
                 {dashboard.tasks.slice(0, 7).map((task) => {
@@ -579,7 +549,7 @@ export default function DashboardPage() {
             action={<div className="flex gap-3"><Link href="/listings" className="text-sm font-semibold text-blue-700 hover:underline">Все проекты</Link><Link href="/listings/new" className="text-sm font-semibold text-blue-700 hover:underline">Создать</Link></div>}
           >
             {dashboard.ownerProjects.length === 0 && dashboard.memberProjects.length === 0 ? (
-              <EmptyState>Пока нет проектов. Создай свой или присоединись к существующему.</EmptyState>
+              <EmptyState>Пока нет проектов. Создайте свой или присоединитесь к существующему.</EmptyState>
             ) : (
               <div className="grid gap-3 md:grid-cols-2">
                 {[...dashboard.ownerProjects, ...dashboard.memberProjects].slice(0, 6).map((project) => {
@@ -662,7 +632,7 @@ export default function DashboardPage() {
 
           <Card title="Мои аукционы" action={<Link href="/auctions/my" className="text-sm font-semibold text-blue-700 hover:underline">Все мои</Link>}>
             {dashboard.auctions.length === 0 ? (
-              <EmptyState>Ты пока не создавал аукционы.</EmptyState>
+              <EmptyState>Вы пока не создавали аукционов.</EmptyState>
             ) : (
               <div className="space-y-2">
                 {dashboard.auctions.slice(0, 4).map((auction) => (
@@ -680,7 +650,7 @@ export default function DashboardPage() {
 
           <Card title="Мои предложения" action={<Link href="/auctions/my" className="text-sm font-semibold text-blue-700 hover:underline">Все</Link>}>
             {dashboard.bids.length === 0 ? (
-              <EmptyState>Ты пока не подавал предложения.</EmptyState>
+              <EmptyState>Вы пока не подавали предложений.</EmptyState>
             ) : (
               <div className="space-y-2">
                 {dashboard.bids.slice(0, 4).map((bid) => {
@@ -698,7 +668,7 @@ export default function DashboardPage() {
           </Card>
         </aside>
       </div>
-    </main>
+    </div>
   )
 
 }

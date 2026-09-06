@@ -1,7 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { Clock3, MessageSquare, Plus, SlidersHorizontal, ArrowUpRight } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { PageHeader } from '@/components/PageHeader'
+import { PageLoading, EmptyState } from '@/components/PageState'
 import { supabase } from '@/lib/supabaseClient'
 import { logAppError, showAppError, showAppMessage } from '@/lib/appFeedback'
 
@@ -28,11 +33,12 @@ function useDebounce<T>(value: T, delay = 400): T {
 }
 
 export default function ListingsPage() {
-  const router = useRouter()
 
   const [listings, setListings] = useState<Listing[]>([])
   const [filtered, setFiltered] = useState<Listing[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [loadAttempt, setLoadAttempt] = useState(0)
 
   const [searchFilter, setSearchFilter] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
@@ -47,24 +53,27 @@ export default function ListingsPage() {
   const debouncedTz = useDebounce(tzFilter)
 
   useEffect(() => {
+    let active = true
     const fetchListings = async () => {
-      const { data, error } = await supabase
-        .from('listings_with_count')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        logAppError('Ошибка загрузки:', error)
-      } else {
-        setListings(data || [])
-        setFiltered(data || [])
+      setLoading(true)
+      setLoadError(false)
+      try {
+        const { data, error } = await supabase
+          .from('listings_with_count')
+          .select('*')
+          .order('created_at', { ascending: false })
+        if (error) throw error
+        if (active) { setListings(data || []); setFiltered(data || []) }
+      } catch (error) {
+        logAppError('Ошибка загрузки проектов:', error)
+        if (active) setLoadError(true)
+      } finally {
+        if (active) setLoading(false)
       }
-
-      setLoading(false)
     }
-
-    fetchListings()
-  }, [])
+    void fetchListings()
+    return () => { active = false }
+  }, [loadAttempt])
 
   useEffect(() => {
     let result = listings
@@ -228,135 +237,44 @@ export default function ListingsPage() {
 }
 
 
-  if (loading) {
-    return <div className="text-center py-12">Загрузка...</div>
+  const resetFilters = () => {
+    setSearchFilter(''); setRoleFilter(''); setSkillFilter(''); setTzFilter('')
   }
+  const hasFilters = Boolean(searchFilter || roleFilter || skillFilter || tzFilter)
+  const tags = (value: string[] | string) => Array.isArray(value) ? value : (value || '').split(',').map((item) => item.trim()).filter(Boolean)
+
+  if (loading) return <PageLoading label="Загружаем проекты…" />
 
   return (
-    <div className="max-w-5xl mx-auto py-12 px-4">
-      <h1 className="text-3xl font-bold mb-6 text-center">Лента проектов</h1>
-
-      <div className="bg-gray-50 border rounded-lg p-4 mb-8">
-        <h2 className="font-semibold mb-2">Фильтр по параметрам:</h2>
-
-        <div className="grid md:grid-cols-4 gap-3">
-          <input
-            type="text"
-            placeholder="Поиск по названию или описанию"
-            value={searchFilter}
-            onChange={(e) => setSearchFilter(e.target.value)}
-            className="border rounded p-2 w-full"
-          />
-
-          <input
-            type="text"
-            placeholder="Роль (например, инженер)"
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-            className="border rounded p-2 w-full"
-          />
-
-          <input
-            type="text"
-            placeholder="Навык (например, CAD)"
-            value={skillFilter}
-            onChange={(e) => setSkillFilter(e.target.value)}
-            className="border rounded p-2 w-full"
-          />
-
-          <input
-            type="text"
-            placeholder="Часовой пояс (например, UTC+3)"
-            value={tzFilter}
-            onChange={(e) => setTzFilter(e.target.value)}
-            className="border rounded p-2 w-full"
-          />
+    <div className="page-shell">
+      <PageHeader eyebrow="Возможности для совместной работы" title="Найдите свой следующий проект" description="Инженерные задачи и команды, которым нужен ваш опыт.">
+        <Button asChild className="action-primary"><Link href="/listings/new"><Plus size={18} />Создать проект</Link></Button>
+      </PageHeader>
+      <section className="filter-panel" aria-label="Фильтры проектов">
+        <div className="flex items-center gap-2 text-sm font-semibold mb-4"><SlidersHorizontal size={17} className="text-blue-600" />Подобрать проект</div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div><label htmlFor="project-query" className="filter-label">Название или описание</label><Input id="project-query" type="search" placeholder="Что вам интересно?" value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)} /></div>
+          <div><label htmlFor="project-role" className="filter-label">Ваша роль</label><Input id="project-role" placeholder="Например, инженер" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} /></div>
+          <div><label htmlFor="project-skill" className="filter-label">Навык</label><Input id="project-skill" placeholder="Например, CAD" value={skillFilter} onChange={(e) => setSkillFilter(e.target.value)} /></div>
+          <div><label htmlFor="project-timezone" className="filter-label">Часовой пояс</label><Input id="project-timezone" placeholder="Например, UTC+3" value={tzFilter} onChange={(e) => setTzFilter(e.target.value)} /></div>
         </div>
-
-        <div className="text-right mt-3">
-          <button
-            onClick={() => {
-              setSearchFilter('')
-              setRoleFilter('')
-              setSkillFilter('')
-              setTzFilter('')
-              setFiltered(listings)
-            }}
-            className="text-sm text-gray-600 hover:text-gray-900 transition"
-          >
-            Сбросить фильтры
-          </button>
-        </div>
-      </div>
-
-      {filtered.length === 0 ? (
-        <div className="text-center text-gray-500">
-          Проекты не найдены по выбранным фильтрам.
-        </div>
-      ) : (
-        <div className="grid gap-6 md:grid-cols-2">
+      </section>
+      <div className="results-bar"><p aria-live="polite">{loadError ? 'Проекты недоступны' : <>Найдено проектов: <strong className="text-slate-900">{filtered.length}</strong></>}</p><button onClick={resetFilters} disabled={!hasFilters} className="text-blue-700 disabled:text-gray-400 disabled:opacity-60 min-h-11">Сбросить фильтры</button></div>
+      {loadError ? <EmptyState title="Не удалось загрузить проекты" description="Проверьте подключение и попробуйте ещё раз."><Button onClick={() => setLoadAttempt((value) => value + 1)} className="action-primary">Повторить загрузку</Button></EmptyState> : filtered.length === 0 ? <EmptyState title={hasFilters ? 'По этим параметрам проектов нет' : 'Новые проекты появятся здесь'} description={hasFilters ? 'Измените запрос или уберите часть фильтров.' : 'Создайте проект и пригласите специалистов к совместной работе.'}>{hasFilters ? <Button variant="outline" onClick={resetFilters}>Сбросить фильтры</Button> : <Link href="/listings/new" className="text-link">Создать первый проект<Plus size={17} /></Link>}</EmptyState> : (
+        <div className="grid gap-5 md:grid-cols-2">
           {filtered.map((item) => (
-            <div
-              key={item.id}
-              className="border rounded-lg shadow-sm p-6 hover:shadow-md transition bg-white"
-            >
-              <h2 className="text-xl font-semibold mb-2">{item.title}</h2>
-              <p className="text-gray-700 mb-4">{item.description}</p>
-
-              <div className="text-sm text-gray-500 mb-1">
-                <b>Роли:</b>{' '}
-                {Array.isArray(item.roles_needed)
-                  ? item.roles_needed.join(', ')
-                  : item.roles_needed}
+            <article key={item.id} className="listing-card">
+              <div className="card-meta mb-4"><span>Инженерный проект</span><span className="ml-auto"><Clock3 size={14} />{new Date(item.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</span></div>
+              <h2><Link href={`/listings/${item.id}`}>{item.title}</Link></h2>
+              <p className="text-gray-600 leading-7 mb-5 line-clamp-3">{item.description}</p>
+              <div className="mb-4"><p className="text-sm font-medium text-gray-700 mb-2">Нужны в команду</p><div className="flex flex-wrap gap-2">{tags(item.roles_needed).length ? tags(item.roles_needed).map((role, index) => <span className="skill-tag bg-blue-50 text-blue-700" key={`${role}-${index}`}>{role}</span>) : <span className="text-sm text-gray-500">Роли уточняются</span>}</div></div>
+              {tags(item.skills).length > 0 && <div className="flex flex-wrap gap-2 mb-5">{tags(item.skills).slice(0, 8).map((skill, index) => <span key={`${skill}-${index}`} className="skill-tag">{skill}</span>)}{tags(item.skills).length > 8 && <span className="skill-tag">+{tags(item.skills).length - 8}</span>}</div>}
+              <div className="card-meta border-t pt-4"><span><MessageSquare size={15} />Отклики: {item.applications_count || 0}</span><span><Clock3 size={15} />{item.timezone || 'Часовой пояс не указан'}</span></div>
+              <div className="card-actions">
+                <Button onClick={() => handleApply(item)} disabled={applyingListingId !== null || appliedListingIds.includes(item.id)} className="min-h-11 rounded-lg">{applyingListingId === item.id ? 'Отправляем…' : appliedListingIds.includes(item.id) ? 'Отклик отправлен' : 'Откликнуться'}</Button>
+                <Button asChild variant="outline" className="min-h-11 rounded-lg"><Link href={`/listings/${item.id}`}>О проекте<ArrowUpRight size={16} /></Link></Button>
               </div>
-
-              <div className="text-sm text-gray-500 mb-1">
-                <b>Навыки:</b>{' '}
-                {Array.isArray(item.skills)
-                  ? item.skills.join(', ')
-                  : item.skills}
-              </div>
-
-              <div className="text-sm text-gray-500">
-                <b>Часовой пояс:</b> {item.timezone || '—'}
-              </div>
-
-              <div className="text-xs text-gray-400 mt-3 mb-2">
-                Опубликовано:{' '}
-                {new Date(item.created_at)
-                  .toISOString()
-                  .slice(0, 19)
-                  .replace('T', ' ')}
-              </div>
-
-              <div className="text-xs text-gray-400 mb-4">
-                💬 {item.applications_count || 0} откликов
-              </div>
-
-              <div className="flex gap-2 mt-3">
-                <button
-                  onClick={() => router.push(`/listings/${item.id}`)}
-                  className="bg-gray-200 text-gray-800 text-sm px-4 py-2 rounded hover:bg-gray-300 transition"
-                >
-                  Подробнее
-                </button>
-
-                <button
-                  onClick={() => handleApply(item)}
-                  disabled={
-                    applyingListingId !== null ||
-                    appliedListingIds.includes(item.id)
-                  }
-                  className="bg-blue-600 text-white text-sm px-4 py-2 rounded hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {applyingListingId === item.id
-                    ? 'Отправляем...'
-                    : appliedListingIds.includes(item.id)
-                      ? 'Отклик отправлен'
-                      : 'Откликнуться'}
-                </button>
-              </div>
-            </div>
+            </article>
           ))}
         </div>
       )}

@@ -3,6 +3,9 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { UsersRound, ListChecks, FolderLock, ArrowRight, Mail } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 type AuthAction = 'password' | 'magic-link' | 'reset-password' | null
 
@@ -248,102 +251,29 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="max-w-sm mx-auto py-16 px-4">
-      <h1 className="text-2xl font-bold mb-6 text-center">
-        {isLogin ? 'Вход' : 'Регистрация'}
-      </h1>
-
-      {errorText && (
-        <div
-          role="alert"
-          className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
-        >
-          {errorText}
+    <div className="auth-layout">
+      <aside className="auth-intro">
+        <p className="eyebrow">Эксперты рядом</p>
+        <h2>Ваш следующий<br />проект начинается<br />с людей.</h2>
+        <p>Присоединяйтесь к специалистам, которые превращают инженерные идеи в результат.</p>
+        <div className="auth-benefits"><div><UsersRound size={22} />Команда под вашу задачу</div><div><ListChecks size={22} />Понятный план работы</div><div><FolderLock size={22} />Закрытая рабочая зона</div></div>
+      </aside>
+      <div className="auth-card">
+        <h1>{isLogin ? 'С возвращением' : 'Создать аккаунт'}</h1>
+        <p className="auth-subtitle">{isLogin ? 'Войдите, чтобы продолжить работу над проектами.' : 'Укажите email и придумайте пароль.'}</p>
+        {errorText && <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorText}</div>}
+        {successText && <div role="status" className="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">{successText}</div>}
+        <form onSubmit={handleAuth} className="space-y-5" aria-busy={loading}>
+          <div><label htmlFor="auth-email">Электронная почта</label><Input id="auth-email" type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} required disabled={loading} className="w-full disabled:bg-gray-100" /></div>
+          <div><label htmlFor="auth-password">Пароль</label><Input id="auth-password" type="password" autoComplete={isLogin ? 'current-password' : 'new-password'} placeholder={isLogin ? 'Введите пароль' : 'Не менее 8 символов'} value={password} onChange={(event) => setPassword(event.target.value)} required minLength={isLogin ? undefined : 8} disabled={loading} className="w-full disabled:bg-gray-100" /></div>
+          <Button type="submit" disabled={loading} className="action-primary auth-submit">{activeAction === 'password' ? 'Подождите…' : isLogin ? 'Войти' : 'Зарегистрироваться'}<ArrowRight size={18} /></Button>
+        </form>
+        <div className="mt-5 flex flex-col gap-3">
+          <Button type="button" variant="outline" onClick={handleMagicLink} disabled={loading || !email.trim()} className="action-secondary w-full"><Mail size={18} />{activeAction === 'magic-link' ? 'Отправляем ссылку…' : 'Получить ссылку для входа'}</Button>
+          <button type="button" onClick={handleForgotPassword} disabled={loading || !email.trim()} className="min-h-11 text-sm text-blue-700 hover:underline disabled:opacity-50">{activeAction === 'reset-password' ? 'Отправляем письмо…' : 'Забыли пароль?'}</button>
         </div>
-      )}
-
-      {successText && (
-        <div
-          role="status"
-          className="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700"
-        >
-          {successText}
-        </div>
-      )}
-
-      <form onSubmit={handleAuth} className="space-y-4">
-        <input
-          type="email"
-          inputMode="email"
-          autoComplete="email"
-          placeholder="Email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          required
-          disabled={loading}
-          className="border rounded w-full p-2 disabled:bg-gray-100 disabled:text-gray-500"
-        />
-
-        <input
-          type="password"
-          autoComplete={isLogin ? 'current-password' : 'new-password'}
-          placeholder="Пароль"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          required
-          minLength={isLogin ? undefined : 8}
-          disabled={loading}
-          className="border rounded w-full p-2 disabled:bg-gray-100 disabled:text-gray-500"
-        />
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {activeAction === 'password'
-            ? 'Подождите...'
-            : isLogin
-              ? 'Войти'
-              : 'Зарегистрироваться'}
-        </button>
-      </form>
-
-      <div className="mt-4 flex flex-col gap-2">
-        <button
-          type="button"
-          onClick={handleMagicLink}
-          disabled={loading || !email.trim()}
-          className="w-full border py-2 rounded hover:bg-gray-50 transition disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {activeAction === 'magic-link'
-            ? 'Отправляем ссылку...'
-            : 'Войти по Magic Link'}
-        </button>
-
-        <button
-          type="button"
-          onClick={handleForgotPassword}
-          disabled={loading || !email.trim()}
-          className="w-full text-sm text-blue-600 underline disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {activeAction === 'reset-password'
-            ? 'Отправляем письмо...'
-            : 'Забыли пароль?'}
-        </button>
+        <p className="border-t pt-5 mt-5 text-center text-sm text-gray-600">{isLogin ? 'Впервые здесь?' : 'Уже есть аккаунт?'}{' '}<button type="button" onClick={switchMode} disabled={loading} className="min-h-11 font-semibold text-blue-700 hover:underline disabled:opacity-50">{isLogin ? 'Создать аккаунт' : 'Войти'}</button></p>
       </div>
-
-      <p className="text-center mt-4 text-sm text-gray-600">
-        {isLogin ? 'Нет аккаунта?' : 'Уже есть аккаунт?'}{' '}
-        <button
-          type="button"
-          onClick={switchMode}
-          disabled={loading}
-          className="text-blue-600 underline disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isLogin ? 'Зарегистрироваться' : 'Войти'}
-        </button>
-      </p>
     </div>
   )
 }

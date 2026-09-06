@@ -312,15 +312,15 @@ export function ProjectChat({
   )
 
   return (
-    <div className="border rounded-xl bg-white shadow-sm mb-8 overflow-hidden">
-      <div className="border-b px-5 py-4 bg-gray-50">
+    <div className="project-chat border rounded-xl bg-white shadow-sm overflow-hidden flex min-h-0 flex-col">
+      <div className="project-chat-heading border-b px-5 py-4 bg-gray-50">
         <h2 className="text-xl font-semibold">Обсуждение проекта</h2>
         <p className="text-sm text-gray-500 mt-1">
           Внутренний чат команды проекта.
         </p>
       </div>
 
-      <div className="h-[480px] overflow-y-auto px-5 py-4 bg-white">
+      <div className="project-chat-messages min-h-0 flex-1 overflow-y-auto px-5 py-4 bg-white">
         {messagesLoading ? (
           <div className="text-sm text-gray-500">
             Загружаем сообщения...
@@ -429,7 +429,7 @@ export function ProjectChat({
                     )}
 
                     <div
-                      className={`text-[11px] mt-2 ${
+                      className={`text-xs mt-2 ${
                         isMine ? 'text-blue-100' : 'text-gray-400'
                       }`}
                     >
@@ -535,8 +535,9 @@ export function ProjectChat({
           </div>
         )}
 
-        <div className="flex gap-3 items-end">
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
           <textarea
+            aria-label="Сообщение команде"
             placeholder="Напишите сообщение для команды..."
             value={newMessageBody}
             onChange={(e) => setNewMessageBody(e.target.value)}
@@ -545,7 +546,7 @@ export function ProjectChat({
 
           <button
             onClick={handleSendMessage}
-            disabled={sendingMessage}
+            disabled={sendingMessage || !newMessageBody.trim()}
             className="bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 transition disabled:opacity-60 whitespace-nowrap"
           >
             {sendingMessage ? '...' : 'Отправить'}

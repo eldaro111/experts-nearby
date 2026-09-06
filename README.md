@@ -1,36 +1,50 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Эксперты рядом
 
-## Getting Started
+Платформа для поиска экспертов, формирования проектных команд и совместной инженерной работы.
 
-First, run the development server:
+Стек: Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4 и Supabase. Версии зависимостей зафиксированы в `package-lock.json`.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Запуск
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Нужен Node.js 20.9+ и npm. Открывайте в IDE корень проекта, где находится `package.json`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Установите зависимости: `npm ci`.
+2. Скопируйте `.env.example` в `.env.local`.
+3. Укажите URL и **публичный anon key** существующего проекта Supabase. Не используйте `service_role` в переменных `NEXT_PUBLIC_*`.
+4. Запустите `npm run dev` и откройте `http://localhost:3000`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+В PowerShell файл настроек можно скопировать командой `Copy-Item .env.example .env.local`; в bash — `cp .env.example .env.local`.
 
-## Learn More
+Для production-сборки: `npm run build`, затем `npm run start`.
 
-To learn more about Next.js, take a look at the following resources:
+Переменные `NEXT_PUBLIC_*` подставляются при сборке: перед развёртыванием укажите настоящие значения и соберите приложение заново. В существующем Supabase сохраняются текущие таблицы, RPC, RLS и Storage. Редизайн не требует миграций базы.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Разделы
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `/` — главная и вход в основные сценарии.
+- `/listings`, `/experts`, `/auctions` — каталоги с поиском и фильтрами.
+- `/dashboard`, `/tasks`, `/calendar`, `/files` — рабочий центр.
+- `/projects/[id]` — закрытая рабочая зона: задачи, вклад, материалы, календарь, отзывы, история и чат.
+- `/profile`, `/settings`, `/notifications` — профиль, настройки и уведомления.
+- `/auth` — вход, регистрация и получение ссылки по email; маршруты восстановления пароля сохранены.
 
-## Deploy on Vercel
+## Сине-белый редизайн
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Общая палитра, типографика, формы и адаптивные правила находятся в `src/app/globals.css`. Общие компоненты: `Header`, `Footer`, `Brand`, `PageHeader`, `PageState`, `FormField`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Главная, каталоги, экран входа и формы получили новую композицию. Рабочие разделы используют единые отступы, заголовки и поверхности. Существующие обработчики операций, ограничения доступа и подключения Supabase сохранены. В каталогах ошибки загрузки отделены от пустых результатов и есть повторная загрузка.
+
+Логотип пользователя сохранён в `public/brand/experts-nearby.png`. В шапке показывается фрагмент исходного изображения средствами CSS, исходный файл не изменён. Мобильная навигация и выпадающие меню поддерживают клавиатуру и Escape. Календарная сетка прокручивается в своей области; поле сообщения остаётся доступным в ограниченной по высоте панели чата.
+
+## Проверки
+
+- `npm run typecheck` — проверка типов.
+- `npm run lint` — существующая проверка ESLint.
+- `npm run build` — production-сборка всех маршрутов.
+- `npm run check` — все три проверки последовательно.
+
+В среде подготовки редизайна доступны проверка типов и сборка с явно фиктивными публичными значениями Supabase. Такая сборка проверяет код и маршруты, но не подтверждает работу сервера и авторизации. Файл с проверочными значениями не включается в архив и Git.
+
+Перед слиянием проверьте с настоящим Supabase: вход и восстановление пароля; создание и редактирование проекта; отклик и приглашение; аукцион и выбор предложения; доступ участника к рабочей зоне; сообщение в чат, загрузку файла и обновление задачи. Проверьте вид страниц на телефоне и десктопе. Браузерная проверка в среде подготовки не выполнялась.
+
+Для имеющихся staging-сценариев см. `README_TZ05_STAGING.md`. Эти сценарии создают данные в тестовой базе; не запускайте их на production.

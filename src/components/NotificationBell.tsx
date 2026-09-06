@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { Bell } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import {
@@ -50,6 +51,21 @@ export function NotificationBell() {
 
   const [userId, setUserId] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const dismiss = (event: PointerEvent) => {
+      if (!panelRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { setOpen(false); triggerRef.current?.focus() }
+    }
+    document.addEventListener('pointerdown', dismiss)
+    document.addEventListener('keydown', escape)
+    return () => { document.removeEventListener('pointerdown', dismiss); document.removeEventListener('keydown', escape) }
+  }, [open])
   const [loading, setLoading] = useState(false)
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
 
@@ -217,7 +233,7 @@ export function NotificationBell() {
   if (!userId) return null
 
   return (
-    <div className="relative">
+    <div ref={panelRef} className="relative" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false) }}>
       <button
         type="button"
         onClick={async () => {
@@ -228,10 +244,13 @@ export function NotificationBell() {
             await loadNotifications(userId)
           }
         }}
-        className="relative rounded-full border bg-white px-3 py-2 text-sm transition hover:bg-gray-50"
+        ref={triggerRef}
+        className="relative icon-button"
+        aria-expanded={open}
+        aria-controls="notification-panel"
         aria-label="Уведомления"
       >
-        🔔
+        <Bell size={21} />
 
         {unreadCount > 0 && (
           <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-xs text-white">
@@ -241,7 +260,7 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-[380px] max-w-[90vw] overflow-hidden rounded-xl border bg-white shadow-lg">
+        <div id="notification-panel" className="notification-panel absolute right-0 z-50 mt-2 w-[380px] max-w-[90vw] overflow-hidden rounded-xl border bg-white shadow-lg">
           <div className="flex items-center justify-between border-b bg-gray-50 px-4 py-3">
             <div>
               <div className="font-semibold">Уведомления</div>

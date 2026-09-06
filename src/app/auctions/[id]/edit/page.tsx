@@ -1,5 +1,9 @@
 'use client'
 
+import { PageLoading } from '@/components/PageState'
+
+import { FormField } from '@/components/FormField'
+
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
@@ -321,13 +325,11 @@ export default function EditAuctionPage() {
     }
   }
 
-  if (loading) {
-    return <div className="text-center py-12 text-gray-500">Загружаем аукцион...</div>
-  }
+  if (loading) return <PageLoading />
 
   if (!auction) {
     return (
-      <div className="max-w-3xl mx-auto py-12 px-4 text-center">
+      <div className="page-shell form-shell text-center">
         <h1 className="text-2xl font-bold mb-3">Аукцион не найден</h1>
         <Link href="/auctions" className="text-blue-600 hover:underline">
           Вернуться к аукционам
@@ -338,7 +340,7 @@ export default function EditAuctionPage() {
 
   if (!isOwner) {
     return (
-      <div className="max-w-3xl mx-auto py-12 px-4 text-center">
+      <div className="page-shell form-shell text-center">
         <h1 className="text-2xl font-bold mb-3">Нет доступа к редактированию</h1>
         <p className="text-gray-600 mb-5">Редактировать аукцион может только его владелец.</p>
         <Link href={`/auctions/${auction.id}`} className="text-blue-600 hover:underline">
@@ -349,7 +351,7 @@ export default function EditAuctionPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto py-10 px-4">
+    <div className="page-shell form-shell">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <Link href={`/auctions/${auction.id}`} className="text-sm text-blue-600 hover:underline">
@@ -378,7 +380,7 @@ export default function EditAuctionPage() {
         <div className="border rounded-xl bg-white p-5 shadow-sm space-y-4">
           <h2 className="text-xl font-semibold">Публичная часть</h2>
 
-          <input
+          <FormField label="Название аукциона"><input
             type="text"
             placeholder="Название"
             value={title}
@@ -386,47 +388,47 @@ export default function EditAuctionPage() {
             className="border rounded p-2 w-full"
             required
             disabled={!canEdit}
-          />
+          /></FormField>
 
-          <input
+          <FormField label="Краткое описание"><input
             type="text"
             placeholder="Краткое описание"
             value={publicSummary}
             onChange={(e) => setPublicSummary(e.target.value)}
             className="border rounded p-2 w-full"
             disabled={!canEdit}
-          />
+          /></FormField>
 
-          <textarea
+          <FormField label="Публичное описание"><textarea
             placeholder="Публичное описание"
             value={publicDescription}
             onChange={(e) => setPublicDescription(e.target.value)}
             className="border rounded p-2 w-full min-h-[140px]"
             disabled={!canEdit}
-          />
+          /></FormField>
 
           <div className="grid md:grid-cols-2 gap-3">
-            <input
+            <FormField label="Категория"><input
               type="text"
               placeholder="Категория: CAD, робототехника, медицина..."
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               className="border rounded p-2 w-full"
               disabled={!canEdit}
-            />
+            /></FormField>
 
-            <input
+            <FormField label="Валюта"><input
               type="text"
               placeholder="Валюта"
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
               className="border rounded p-2 w-full"
               disabled={!canEdit}
-            />
+            /></FormField>
           </div>
 
           <div className="grid md:grid-cols-3 gap-3">
-            <input
+            <FormField label="Сумма от"><input
               type="number"
               min="0"
               placeholder={isOffer ? 'Ожидаемая сумма от' : 'Бюджет от'}
@@ -434,9 +436,9 @@ export default function EditAuctionPage() {
               onChange={(e) => setBudgetMin(e.target.value)}
               className="border rounded p-2 w-full"
               disabled={!canEdit}
-            />
+            /></FormField>
 
-            <input
+            <FormField label="Сумма до"><input
               type="number"
               min="0"
               placeholder={isOffer ? 'Ожидаемая сумма до' : 'Бюджет до'}
@@ -444,15 +446,15 @@ export default function EditAuctionPage() {
               onChange={(e) => setBudgetMax(e.target.value)}
               className="border rounded p-2 w-full"
               disabled={!canEdit}
-            />
+            /></FormField>
 
-            <input
+            <FormField label="Приём предложений до"><input
               type="datetime-local"
               value={endsAt}
               onChange={(e) => setEndsAt(e.target.value)}
               className="border rounded p-2 w-full"
               disabled={!canEdit}
-            />
+            /></FormField>
           </div>
         </div>
 
@@ -460,77 +462,78 @@ export default function EditAuctionPage() {
           <div className="border rounded-xl bg-white p-5 shadow-sm space-y-4">
             <h2 className="text-xl font-semibold">Заказ на разработку</h2>
 
-            <input
+            <FormField label="Нужные роли"><input
               type="text"
               placeholder="Нужные роли через запятую"
               value={requiredRoles}
               onChange={(e) => setRequiredRoles(e.target.value)}
               className="border rounded p-2 w-full"
               disabled={!canEdit}
-            />
+            /></FormField>
 
-            <input
+            <FormField label="Нужные навыки"><input
               type="text"
               placeholder="Нужные навыки через запятую"
               value={requiredSkills}
               onChange={(e) => setRequiredSkills(e.target.value)}
               className="border rounded p-2 w-full"
               disabled={!canEdit}
-            />
+            /></FormField>
 
-            <textarea
+            <FormField label="Ожидаемый результат"><textarea
               placeholder="Ожидаемый результат"
               value={expectedResult}
               onChange={(e) => setExpectedResult(e.target.value)}
               className="border rounded p-2 w-full min-h-[100px]"
               disabled={!canEdit}
-            />
+            /></FormField>
 
-            <textarea
+            <FormField label="Критерии выбора"><textarea
               placeholder="Критерии выбора исполнителя / команды"
               value={selectionCriteria}
               onChange={(e) => setSelectionCriteria(e.target.value)}
               className="border rounded p-2 w-full min-h-[100px]"
               disabled={!canEdit}
-            />
+            /></FormField>
           </div>
         ) : (
           <div className="border rounded-xl bg-white p-5 shadow-sm space-y-4">
             <h2 className="text-xl font-semibold">Проект для внедрения</h2>
 
             <div className="grid md:grid-cols-2 gap-3">
-              <input
+              <FormField label="Тип сделки"><input
                 type="text"
                 placeholder="Тип сделки: license, pilot, partnership..."
                 value={dealType}
                 onChange={(e) => setDealType(e.target.value)}
                 className="border rounded p-2 w-full"
                 disabled={!canEdit}
-              />
+              /></FormField>
 
-              <input
+              <FormField label="Готовность проекта"><input
                 type="text"
                 placeholder="Готовность: idea, prototype, mvp, production"
                 value={readinessLevel}
                 onChange={(e) => setReadinessLevel(e.target.value)}
                 className="border rounded p-2 w-full"
                 disabled={!canEdit}
-              />
+              /></FormField>
             </div>
 
-            <input
+            <FormField label="Права на разработку"><input
               type="text"
               placeholder="IP-режим / права"
               value={ipMode}
               onChange={(e) => setIpMode(e.target.value)}
               className="border rounded p-2 w-full"
               disabled={!canEdit}
-            />
+            /></FormField>
 
             <div>
               <label className="block text-sm text-gray-600 mb-1">Связанный проект</label>
 
               <select
+                aria-label="Связанный проект"
                 value={linkedListingId}
                 onChange={(e) => setLinkedListingId(e.target.value)}
                 className="border rounded p-2 w-full bg-white"
@@ -549,13 +552,13 @@ export default function EditAuctionPage() {
               </p>
             </div>
 
-            <textarea
+            <FormField label="Требования к партнёру"><textarea
               placeholder="Что требуется от производства / партнёра"
               value={implementationNeeds}
               onChange={(e) => setImplementationNeeds(e.target.value)}
               className="border rounded p-2 w-full min-h-[100px]"
               disabled={!canEdit}
-            />
+            /></FormField>
 
             <label className="flex items-center gap-2 text-sm text-gray-700">
               <input
@@ -573,21 +576,21 @@ export default function EditAuctionPage() {
                 Эти данные обновляются отдельно в auction_protected и не попадают в публичную часть.
               </p>
 
-              <textarea
+              <FormField label="Закрытое описание"><textarea
                 placeholder="Закрытое описание: детали технологии, материалы, риски, ссылки на приватные документы"
                 value={protectedDescription}
                 onChange={(e) => setProtectedDescription(e.target.value)}
                 className="border rounded p-2 w-full min-h-[140px] bg-white"
                 disabled={!canEdit}
-              />
+              /></FormField>
 
-              <textarea
+              <FormField label="Закрытые ссылки"><textarea
                 placeholder="Закрытые ссылки, каждая с новой строки"
                 value={protectedLinks}
                 onChange={(e) => setProtectedLinks(e.target.value)}
                 className="border rounded p-2 w-full min-h-[90px] bg-white"
                 disabled={!canEdit}
-              />
+              /></FormField>
             </div>
           </div>
         )}

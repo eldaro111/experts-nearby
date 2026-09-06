@@ -501,8 +501,9 @@ export function ProjectCalendar({
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
+              aria-label="Предыдущий месяц"
               onClick={() => shiftCalendarMonth(-1)}
               className="bg-gray-200 text-gray-800 text-sm px-3 py-1 rounded hover:bg-gray-300 transition"
             >
@@ -514,6 +515,7 @@ export function ProjectCalendar({
             </div>
 
             <button
+              aria-label="Следующий месяц"
               onClick={() => shiftCalendarMonth(1)}
               className="bg-gray-200 text-gray-800 text-sm px-3 py-1 rounded hover:bg-gray-300 transition"
             >
@@ -534,6 +536,7 @@ export function ProjectCalendar({
           </div>
         </div>
 
+        <div className="calendar-scroll" role="region" aria-label="Календарь проекта по дням" tabIndex={0}><div className="calendar-grid">
         <div className="grid grid-cols-7 gap-2 text-xs text-gray-500 mb-2">
           {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((day) => (
             <div key={day} className="text-center font-medium">
@@ -576,14 +579,14 @@ export function ProjectCalendar({
                 </div>
 
                 {items.length === 0 ? (
-                  <div className="text-[11px] text-gray-300">—</div>
+                  <div className="text-xs text-gray-300">—</div>
                 ) : (
                   <div className="space-y-1">
                     {items.slice(0, 3).map((item) => (
                       <div
                         key={item.id}
                         title={`${item.title} · ${formatDateTime(item.starts_at || null)} → ${formatDateTime(item.ends_at || null)}`}
-                        className={`rounded px-2 py-1 text-[11px] leading-tight border ${
+                        className={`rounded px-2 py-1 text-xs leading-tight border ${
                           calendarItemClassName(item)
                         }`}
                       >
@@ -595,7 +598,7 @@ export function ProjectCalendar({
                     ))}
 
                     {items.length > 3 && (
-                      <div className="text-[11px] text-gray-500">
+                      <div className="text-xs text-gray-500">
                         + ещё {items.length - 3}
                       </div>
                     )}
@@ -605,6 +608,8 @@ export function ProjectCalendar({
             )
           })}
         </div>
+
+        </div></div>
 
         <div className="flex gap-3 flex-wrap mt-4 text-xs text-gray-600">
           <span className="inline-flex items-center gap-1">

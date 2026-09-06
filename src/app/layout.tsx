@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 
 import './globals.css'
 import Header from '@/components/Header'
+import { Footer } from '@/components/Footer'
 
 export const metadata: Metadata = {
   title: 'Эксперты рядом',
@@ -16,9 +17,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru">
-      <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
+      <body className="min-h-screen antialiased">
         <Header />
-        <main>{children}</main>
+        <main id="main-content" tabIndex={-1} className="site-main">{children}</main>
+        <Footer />
       </body>
     </html>
   )

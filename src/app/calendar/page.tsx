@@ -1,5 +1,9 @@
 'use client'
 
+import { PageLoading } from '@/components/PageState'
+
+import { PageHeader } from '@/components/PageHeader'
+
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -442,43 +446,11 @@ export default function CalendarPage() {
     return filteredEntries.filter((entry) => sameLocalDay(entry.date, date))
   }
 
-  if (loading) {
-    return (
-      <main className="mx-auto max-w-6xl px-4 py-8">
-        <div className="rounded-xl border bg-white p-8 text-center text-gray-600 shadow-sm">
-          Загружаю календарь...
-        </div>
-      </main>
-    )
-  }
+  if (loading) return <PageLoading />
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8">
-      <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <p className="mb-2 text-sm font-medium text-blue-700">Рабочий центр</p>
-          <h1 className="text-3xl font-bold text-gray-900">Календарь</h1>
-          <p className="mt-2 max-w-2xl text-gray-600">
-            Все дедлайны, старты задач и события из проектов, к которым у тебя есть доступ.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-3">
-          <Link
-            href="/tasks"
-            className="rounded-lg border bg-white px-4 py-2 text-sm font-medium text-blue-700 shadow-sm transition hover:bg-blue-50"
-          >
-            Задачи
-          </Link>
-          <button
-            onClick={() => loadCalendar(true)}
-            disabled={refreshing}
-            className="rounded-lg border bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:opacity-60"
-          >
-            {refreshing ? 'Обновляем...' : 'Обновить'}
-          </button>
-        </div>
-      </div>
+    <div className="page-shell">
+      <PageHeader eyebrow="Рабочий центр" title="Календарь" description="Дедлайны, начало работ и события ваших проектов."><Link href="/tasks" className="action-secondary">Мои задачи</Link><button onClick={() => loadCalendar(true)} disabled={refreshing} className="action-secondary disabled:opacity-60">{refreshing ? 'Обновляем…' : 'Обновить'}</button></PageHeader>
 
       {errors.length > 0 && (
         <div className="mb-6 rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800">
@@ -576,8 +548,9 @@ export default function CalendarPage() {
               <p className="text-sm text-gray-500">События отображаются точечно по дате старта или дедлайна.</p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
+                aria-label="Предыдущий месяц"
                 onClick={() => shiftMonth(-1)}
                 className="rounded-lg bg-gray-100 px-3 py-1 text-sm text-gray-700 transition hover:bg-gray-200"
               >
@@ -587,6 +560,7 @@ export default function CalendarPage() {
                 {formatMonthLabel(monthStart)}
               </div>
               <button
+                aria-label="Следующий месяц"
                 onClick={() => shiftMonth(1)}
                 className="rounded-lg bg-gray-100 px-3 py-1 text-sm text-gray-700 transition hover:bg-gray-200"
               >
@@ -601,6 +575,7 @@ export default function CalendarPage() {
             </div>
           </div>
 
+          <div className="calendar-scroll" role="region" aria-label="Календарь по дням" tabIndex={0}><div className="calendar-grid">
           <div className="mb-2 grid grid-cols-7 gap-2 text-xs font-medium text-gray-500">
             {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((day) => (
               <div key={day} className="text-center">{day}</div>
@@ -632,7 +607,7 @@ export default function CalendarPage() {
                         key={entry.id}
                         href={entry.href}
                         title={`${entryTypeLabel(entry)} · ${entry.projectTitle}`}
-                        className={`block rounded border px-2 py-1 text-[11px] leading-tight transition hover:brightness-95 ${entryClassName(entry)}`}
+                        className={`block rounded border px-2 py-1 text-xs leading-tight transition hover:brightness-95 ${entryClassName(entry)}`}
                       >
                         <div className="truncate font-medium">{entry.title}</div>
                         <div className="truncate opacity-80">{entryTypeLabel(entry)}</div>
@@ -640,13 +615,14 @@ export default function CalendarPage() {
                     ))}
 
                     {dateEntries.length > 3 && (
-                      <div className="text-[11px] text-gray-500">+ ещё {dateEntries.length - 3}</div>
+                      <div className="text-xs text-gray-500">+ ещё {dateEntries.length - 3}</div>
                     )}
                   </div>
                 </div>
               )
             })}
           </div>
+          </div></div>
         </section>
 
         <aside className="space-y-6">
@@ -713,6 +689,6 @@ export default function CalendarPage() {
           </section>
         </aside>
       </div>
-    </main>
+    </div>
   )
 }
