@@ -127,7 +127,7 @@ export function ProfileReviews({ userId }: ProfileReviewsProps) {
         <div>
           <h2 className="text-xl font-semibold">Отзывы</h2>
           <p className="text-sm text-gray-500 mt-1">
-            Отзывы по завершённым и текущим проектам платформы.
+            Отзывы участников по завершённым проектам платформы.
           </p>
         </div>
 

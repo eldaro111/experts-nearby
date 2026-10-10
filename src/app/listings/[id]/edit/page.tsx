@@ -1,5 +1,9 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
+import { UniversityFields } from '@/components/UniversityFields'
+import { TimezoneSelect } from '@/components/TimezoneSelect'
 import { FormField } from '@/components/FormField'
 
 import { useEffect, useState } from 'react'
@@ -54,10 +58,11 @@ export default function EditListingPage() {
         .update({
           title: cleanTitle,
           description: cleanDescription,
-          roles_needed: listing.roles_needed,
-          skills: listing.skills,
+          roles_needed: Array.isArray(listing.roles_needed) ? listing.roles_needed : String(listing.roles_needed || '').split(',').map(s=>s.trim()).filter(Boolean),
+          skills: Array.isArray(listing.skills) ? listing.skills : String(listing.skills || '').split(',').map(s=>s.trim()).filter(Boolean),
           timezone: listing.timezone,
           visibility: listing.visibility,
+          university_id: listing.university_id || null, school_id: listing.school_id || null, study_group_id: listing.study_group_id || null,
         })
         .eq('id', id)
 
@@ -127,13 +132,8 @@ export default function EditListingPage() {
           className="border rounded p-2 w-full"
         /></FormField>
 
-        <FormField label="Часовой пояс"><input
-          type="text"
-          value={listing.timezone || ''}
-          onChange={(e) => setListing({ ...listing, timezone: e.target.value })}
-          placeholder="Часовой пояс"
-          className="border rounded p-2 w-full"
-        /></FormField>
+        <FormField label="Часовой пояс"><TimezoneSelect value={listing.timezone || ''} onChange={value => setListing({...listing,timezone:value})} /></FormField>
+        <section><h2 className="font-semibold mb-4">Проект вуза (необязательно)</h2><UniversityFields value={{university_id:listing.university_id || null, school_id:listing.school_id || null, study_group_id:listing.study_group_id || null}} onChange={value=>setListing({...listing,...value})} allowCreate /></section>
 
         <FormField label="Видимость проекта"><select
           value={listing.visibility || 'public'}
@@ -142,7 +142,7 @@ export default function EditListingPage() {
           }
           className="border rounded p-2 w-full"
         >
-          <option value="public">Публичный</option>
+          <option value="public"><UiText text={"Публичный"}/></option>
           <option value="private">Приватный</option>
         </select></FormField>
 

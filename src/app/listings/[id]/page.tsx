@@ -1,5 +1,7 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
 import { PageLoading } from '@/components/PageState'
 
 import { useEffect, useState } from 'react'
@@ -17,10 +19,12 @@ interface Listing {
   timezone: string
   created_by: string
   created_at: string
+  completed_at?: string | null
   visibility?: string
 }
 
 interface ApplicantProfile {
+  expert_code?: string
   user_id: string
   display_name: string
 }
@@ -80,7 +84,7 @@ export default function ListingDetailsPage() {
 
       const { data: authorData, error: authorError } = await supabase
         .from('profiles_collaboration')
-        .select('user_id, display_name')
+        .select('user_id, display_name, expert_code')
         .eq('user_id', project.created_by)
         .maybeSingle()
 
@@ -126,7 +130,7 @@ export default function ListingDetailsPage() {
         } else {
           const { data: acceptedProfiles, error: acceptedProfilesError } = await supabase
             .from('profiles_collaboration')
-            .select('user_id, display_name')
+            .select('user_id, display_name, expert_code')
             .in('user_id', acceptedUserIds)
 
           if (acceptedProfilesError) {
@@ -142,7 +146,7 @@ export default function ListingDetailsPage() {
         } else {
           const { data: pendingProfiles, error: pendingProfilesError } = await supabase
             .from('profiles_collaboration')
-            .select('user_id, display_name')
+            .select('user_id, display_name, expert_code')
             .in('user_id', pendingUserIds)
 
           if (pendingProfilesError) {
@@ -156,7 +160,7 @@ export default function ListingDetailsPage() {
 
       const { data: expertsData, error: expertsError } = await supabase
         .from('profiles_public')
-        .select('user_id, display_name')
+        .select('user_id, display_name, expert_code')
         .order('display_name', { ascending: true })
 
       if (expertsError) {
@@ -695,7 +699,7 @@ const handleLeaveProject = async () => {
         Опубликовано: {new Date(listing.created_at).toLocaleString()}
       </div>
 
-      {isAuthor ? (
+      {listing.completed_at ? <p className="rounded-xl bg-green-50 text-green-800 p-4 my-4">Проект завершён. Команда и задачи зафиксированы; участникам доступны отзывы в рабочей зоне.</p> : isAuthor ? (
         <div className="space-y-4">
           <button
             onClick={() => router.push(`/listings/${listing.id}/edit`)}
@@ -716,7 +720,7 @@ const handleLeaveProject = async () => {
                 <option value="">Выберите эксперта...</option>
                 {availableExperts.map((ex) => (
                   <option key={ex.user_id} value={ex.user_id}>
-                    {ex.display_name || 'Без имени'}
+                    {ex.expert_code || 'Номер не присвоен'} ({ex.display_name || 'Имя не указано'})
                   </option>
                 ))}
               </select>
@@ -788,7 +792,7 @@ const handleLeaveProject = async () => {
         <p className="text-gray-500 mb-6">Автор не найден.</p>
       )}
 
-      <h2 className="text-xl font-semibold mb-4">Участники</h2>
+      <h2 className="text-xl font-semibold mb-4"><UiText text={"Участники"}/></h2>
       {participants.length === 0 ? (
         <p className="text-gray-500 mb-6">Пока нет принятых участников.</p>
       ) : (
@@ -803,7 +807,7 @@ const handleLeaveProject = async () => {
                   {a.display_name || 'Без имени'}
                 </button>
 
-                {isAuthor && (
+                {isAuthor && !listing.completed_at && (
                   <button
                     onClick={() => handleRemoveParticipant(a.user_id)}
                     disabled={actionLoadingUserId === a.user_id}
@@ -818,7 +822,7 @@ const handleLeaveProject = async () => {
         </ul>
       )}
 
-      {isAuthor && (
+      {isAuthor && !listing.completed_at && (
         <>
           <h2 className="text-xl font-semibold mb-4">Отклики</h2>
           {pendingApplicants.length === 0 ? (
@@ -848,7 +852,7 @@ const handleLeaveProject = async () => {
                       disabled={actionLoadingUserId === applicant.user_id}
                       className="bg-gray-600 text-white text-xs px-3 py-1 rounded hover:bg-gray-700 transition disabled:opacity-60"
                     >
-                      {actionLoadingUserId === applicant.user_id ? '...' : 'Отклонить'}
+                      <UiText text={actionLoadingUserId === applicant.user_id ? '...' : 'Отклонить'}/>
                     </button>
                   </div>
                 </li>

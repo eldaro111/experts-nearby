@@ -1,5 +1,7 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
 import { PageLoading } from '@/components/PageState'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -1015,9 +1017,7 @@ export default function AuctionDetailsPage() {
                           onClick={() => handleBidDecision(bid, 'rejected')}
                           disabled={updatingId === bid.id}
                           className="bg-red-600 text-white text-sm px-3 py-1 rounded hover:bg-red-700 disabled:opacity-60"
-                        >
-                          Отклонить
-                        </button>
+                        ><UiText text={"Отклонить"}/></button>
                       </div>
                     )}
                   </div>
@@ -1059,9 +1059,7 @@ export default function AuctionDetailsPage() {
                             onClick={() => handleAccessDecision(request, 'rejected')}
                             disabled={updatingId === request.id}
                             className="bg-red-600 text-white text-sm px-3 py-1 rounded hover:bg-red-700 disabled:opacity-60"
-                          >
-                            Отклонить
-                          </button>
+                          ><UiText text={"Отклонить"}/></button>
                         </div>
                       )}
                     </div>

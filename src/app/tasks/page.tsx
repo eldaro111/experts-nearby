@@ -1,5 +1,7 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
 import { PageLoading } from '@/components/PageState'
 
 import { PageHeader } from '@/components/PageHeader'
@@ -373,7 +375,7 @@ export default function TasksPage() {
 
   return (
     <div className="page-shell">
-      <PageHeader eyebrow="Рабочий центр" title="Мои задачи" description="Задачи из доступных проектов: исполнители, сроки и статусы."><button type="button" onClick={() => loadTasks(true)} disabled={refreshing} className="action-secondary disabled:opacity-60">{refreshing ? 'Обновляем…' : 'Обновить'}</button><Link href="/dashboard" className="action-secondary">Рабочий центр</Link></PageHeader>
+      <PageHeader eyebrow="Рабочий центр" title="Мои задачи" description="Задачи из доступных проектов: исполнители, сроки и статусы."><button type="button" onClick={() => loadTasks(true)} disabled={refreshing} className="action-secondary disabled:opacity-60"><UiText text={refreshing ? 'Обновляем…' : 'Обновить'}/></button><Link href="/dashboard" className="action-secondary"><UiText text={"Рабочий центр"}/></Link></PageHeader>
 
       {errorText && (
         <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -505,9 +507,7 @@ export default function TasksPage() {
                     <Link
                       href={`/projects/${task.project_id}`}
                       className="rounded-lg border px-3 py-2 text-center text-sm text-gray-700 transition hover:bg-gray-50"
-                    >
-                      Открыть проект
-                    </Link>
+                    ><UiText text={"Открыть проект"}/></Link>
 
                     {canChangeStatus && task.status !== 'doing' && task.status !== 'done' && (
                       <button

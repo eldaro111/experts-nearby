@@ -8,6 +8,7 @@ export interface Listing {
   created_by: string
   created_at: string
   deadline_at: string | null
+  completed_at?: string | null
 }
 
 export type TaskStatus = 'todo' | 'doing' | 'done'

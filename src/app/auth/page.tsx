@@ -1,10 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { UiText, useT } from '@/components/LocaleProvider'
+
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { UsersRound, ListChecks, FolderLock, ArrowRight, Mail } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { PasswordInput } from '@/components/PasswordInput'
 import { Input } from '@/components/ui/input'
 
 type AuthAction = 'password' | 'magic-link' | 'reset-password' | null
@@ -68,13 +71,16 @@ function getAuthErrorMessage(error: unknown) {
 }
 
 export default function AuthPage() {
+  const t = useT()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [passwordConfirm, setPasswordConfirm] = useState('')
   const [isLogin, setIsLogin] = useState(true)
   const [activeAction, setActiveAction] = useState<AuthAction>(null)
   const [errorText, setErrorText] = useState('')
   const [successText, setSuccessText] = useState('')
 
+  useEffect(() => { if (new URLSearchParams(window.location.search).get('mode') === 'signup') setIsLogin(false) }, [])
   const router = useRouter()
   const loading = activeAction !== null
 
@@ -157,6 +163,7 @@ export default function AuthPage() {
 
     if (loading) return
 
+    if (!isLogin && password !== passwordConfirm) { setErrorText('Пароли не совпадают.'); return }
     startAction('password')
 
     try {
@@ -189,6 +196,7 @@ export default function AuthPage() {
         email: email.trim(),
         options: {
           emailRedirectTo: `${origin}/auth/callback?type=magiclink`,
+          shouldCreateUser: false,
         },
       })
 
@@ -246,6 +254,7 @@ export default function AuthPage() {
     if (loading) return
 
     setIsLogin((current) => !current)
+    setPassword(''); setPasswordConfirm('')
     setErrorText('')
     setSuccessText('')
   }
@@ -253,26 +262,27 @@ export default function AuthPage() {
   return (
     <div className="auth-layout">
       <aside className="auth-intro">
-        <p className="eyebrow">Эксперты рядом</p>
-        <h2>Ваш следующий<br />проект начинается<br />с людей.</h2>
-        <p>Присоединяйтесь к специалистам, которые превращают инженерные идеи в результат.</p>
-        <div className="auth-benefits"><div><UsersRound size={22} />Команда под вашу задачу</div><div><ListChecks size={22} />Понятный план работы</div><div><FolderLock size={22} />Закрытая рабочая зона</div></div>
+        <p className="eyebrow">Эксперты Рядом</p>
+        <h2><UiText text={"Ваш следующий"}/><br /><UiText text={"проект начинается"}/><br /><UiText text={"с людей."}/></h2>
+        <p><UiText text={"Присоединяйтесь к специалистам, которые превращают инженерные идеи в результат."}/></p>
+        <div className="auth-benefits"><div><UsersRound size={22} /><UiText text={"Команда под вашу задачу"}/></div><div><ListChecks size={22} /><UiText text={"Понятный план работы"}/></div><div><FolderLock size={22} /><UiText text={"Закрытая рабочая зона"}/></div></div>
       </aside>
       <div className="auth-card">
-        <h1>{isLogin ? 'С возвращением' : 'Создать аккаунт'}</h1>
-        <p className="auth-subtitle">{isLogin ? 'Войдите, чтобы продолжить работу над проектами.' : 'Укажите email и придумайте пароль.'}</p>
+        <h1><UiText text={isLogin ? 'С возвращением!' : 'Создать аккаунт'}/></h1>
+        <p className="auth-subtitle"><UiText text={isLogin ? 'Войдите, чтобы продолжить работу над проектами.' : 'Укажите email и придумайте пароль.'}/></p>
         {errorText && <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorText}</div>}
         {successText && <div role="status" className="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">{successText}</div>}
         <form onSubmit={handleAuth} className="space-y-5" aria-busy={loading}>
-          <div><label htmlFor="auth-email">Электронная почта</label><Input id="auth-email" type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} required disabled={loading} className="w-full disabled:bg-gray-100" /></div>
-          <div><label htmlFor="auth-password">Пароль</label><Input id="auth-password" type="password" autoComplete={isLogin ? 'current-password' : 'new-password'} placeholder={isLogin ? 'Введите пароль' : 'Не менее 8 символов'} value={password} onChange={(event) => setPassword(event.target.value)} required minLength={isLogin ? undefined : 8} disabled={loading} className="w-full disabled:bg-gray-100" /></div>
+          <div><label htmlFor="auth-email"><UiText text={"Электронная почта"}/></label><Input id="auth-email" type="email" inputMode="email" autoComplete="email" placeholder="name@example.ru" value={email} onChange={(event) => setEmail(event.target.value)} required disabled={loading} className="w-full disabled:bg-gray-100" /></div>
+          <div><label htmlFor="auth-password"><UiText text={"Пароль"}/></label><PasswordInput id="auth-password" autoComplete={isLogin ? 'current-password' : 'new-password'} placeholder={t(isLogin ? 'Введите пароль' : 'Не менее 8 символов')} value={password} onChange={(event) => setPassword(event.target.value)} required minLength={isLogin ? undefined : 8} disabled={loading} className="w-full disabled:bg-gray-100" /></div>
+          {!isLogin && <div><label htmlFor="auth-password-confirm"><UiText text={"Повторите пароль"}/></label><PasswordInput id="auth-password-confirm" autoComplete="new-password" value={passwordConfirm} onChange={event => setPasswordConfirm(event.target.value)} required minLength={8} disabled={loading} aria-describedby="password-match" /><p id="password-match" aria-live="polite" className={`text-sm mt-2 ${passwordConfirm && password !== passwordConfirm ? 'text-red-700' : 'text-green-700'}`}>{passwordConfirm ? password === passwordConfirm ? 'Пароли совпадают' : 'Пароли не совпадают' : ''}</p></div>}
           <Button type="submit" disabled={loading} className="action-primary auth-submit">{activeAction === 'password' ? 'Подождите…' : isLogin ? 'Войти' : 'Зарегистрироваться'}<ArrowRight size={18} /></Button>
         </form>
         <div className="mt-5 flex flex-col gap-3">
-          <Button type="button" variant="outline" onClick={handleMagicLink} disabled={loading || !email.trim()} className="action-secondary w-full"><Mail size={18} />{activeAction === 'magic-link' ? 'Отправляем ссылку…' : 'Получить ссылку для входа'}</Button>
-          <button type="button" onClick={handleForgotPassword} disabled={loading || !email.trim()} className="min-h-11 text-sm text-blue-700 hover:underline disabled:opacity-50">{activeAction === 'reset-password' ? 'Отправляем письмо…' : 'Забыли пароль?'}</button>
+          <Button type="button" variant="outline" onClick={handleMagicLink} disabled={loading || !email.trim()} className="action-secondary w-full"><Mail size={18} /><UiText text={activeAction === 'magic-link' ? 'Отправляем ссылку…' : 'Получить ссылку для входа'}/></Button>
+          <button type="button" onClick={handleForgotPassword} disabled={loading || !email.trim()} className="min-h-11 text-sm text-blue-700 hover:underline disabled:opacity-50"><UiText text={activeAction === 'reset-password' ? 'Отправляем письмо…' : 'Забыли пароль?'}/></button>
         </div>
-        <p className="border-t pt-5 mt-5 text-center text-sm text-gray-600">{isLogin ? 'Впервые здесь?' : 'Уже есть аккаунт?'}{' '}<button type="button" onClick={switchMode} disabled={loading} className="min-h-11 font-semibold text-blue-700 hover:underline disabled:opacity-50">{isLogin ? 'Создать аккаунт' : 'Войти'}</button></p>
+        <p className="border-t pt-5 mt-5 text-center text-sm text-gray-600"><UiText text={isLogin ? 'Впервые здесь?' : 'Уже есть аккаунт?'}/>{' '}<button type="button" onClick={switchMode} disabled={loading} className="min-h-11 font-semibold text-blue-700 hover:underline disabled:opacity-50"><UiText text={isLogin ? 'Создать аккаунт' : 'Войти'}/></button></p>
       </div>
     </div>
   )

@@ -1,6 +1,9 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
 import Link from 'next/link'
+import { PasswordInput } from '@/components/PasswordInput'
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
@@ -257,8 +260,7 @@ function SetPasswordContent() {
           <span className="mb-1 block text-sm font-medium text-gray-700">
             Новый пароль
           </span>
-          <input
-            type="password"
+          <PasswordInput
             autoComplete="new-password"
             placeholder="Минимум 8 символов"
             value={password}
@@ -270,11 +272,8 @@ function SetPasswordContent() {
         </label>
 
         <label className="block">
-          <span className="mb-1 block text-sm font-medium text-gray-700">
-            Повторите пароль
-          </span>
-          <input
-            type="password"
+          <span className="mb-1 block text-sm font-medium text-gray-700"><UiText text={"Повторите пароль"}/></span>
+          <PasswordInput
             autoComplete="new-password"
             placeholder="Повторите новый пароль"
             value={password2}
@@ -285,6 +284,7 @@ function SetPasswordContent() {
           />
         </label>
 
+        <p aria-live="polite" className={`text-sm ${password2 && password !== password2 ? 'text-red-700' : 'text-green-700'}`}>{password2 ? password === password2 ? 'Пароли совпадают' : 'Пароли не совпадают' : ''}</p>
         <button
           type="submit"
           disabled={loading}

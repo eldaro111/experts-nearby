@@ -1,5 +1,7 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { logAppError } from '@/lib/appFeedback'
@@ -140,7 +142,7 @@ export function ProjectActivity({ projectId }: ProjectActivityProps) {
           disabled={loading}
           className="text-sm border rounded-lg px-3 py-2 hover:bg-gray-50 transition disabled:opacity-60"
         >
-          {loading ? 'Обновляем...' : 'Обновить'}
+          <UiText text={loading ? 'Обновляем...' : 'Обновить'}/>
         </button>
       </div>
 

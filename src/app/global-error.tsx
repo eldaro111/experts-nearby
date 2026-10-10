@@ -1,5 +1,7 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
 import { useEffect } from 'react'
 import { getAppErrorMessage, logAppError } from '@/lib/appFeedback'
 
@@ -43,9 +45,7 @@ export default function GlobalError({
               borderRadius: 8,
               cursor: 'pointer',
             }}
-          >
-            Повторить
-          </button>
+          ><UiText text={"Повторить"}/></button>
         </main>
       </body>
     </html>

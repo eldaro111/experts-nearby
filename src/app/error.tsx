@@ -1,5 +1,7 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
 import { useEffect } from 'react'
 import { getAppErrorMessage, logAppError } from '@/lib/appFeedback'
 
@@ -31,9 +33,7 @@ export default function ErrorPage({
         type="button"
         onClick={reset}
         className="mt-6 rounded-lg bg-blue-600 px-5 py-2 text-white transition hover:bg-blue-700"
-      >
-        Повторить
-      </button>
+      ><UiText text={"Повторить"}/></button>
     </main>
   )
 }

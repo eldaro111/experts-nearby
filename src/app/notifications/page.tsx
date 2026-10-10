@@ -1,5 +1,7 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
 import { PageLoading } from '@/components/PageState'
 
 import { PageHeader } from '@/components/PageHeader'
@@ -74,6 +76,9 @@ function typeLabel(type: string) {
     project_member_removed: 'Участник удалён',
     project_member_added: 'Участник добавлен',
 
+    recommended_project: 'Рекомендованный проект',
+    recommended_expert: 'Рекомендованный специалист',
+
     // Задачи
     task_created: 'Задача создана',
     task_updated: 'Задача обновлена',
@@ -105,6 +110,7 @@ function typeLabel(type: string) {
 }
 
 function typeBadgeClass(type: string) {
+  if (type.startsWith('recommended_')) return 'bg-cyan-50 text-cyan-800 border-cyan-200'
   if (type.includes('auction')) return 'bg-purple-50 text-purple-700 border-purple-200'
   if (type.includes('task')) return 'bg-blue-50 text-blue-700 border-blue-200'
   if (type.includes('file')) return 'bg-orange-50 text-orange-700 border-orange-200'
@@ -364,7 +370,7 @@ export default function NotificationsPage() {
 
   return (
     <div className="page-shell">
-      <PageHeader eyebrow="Рабочий центр" title="Уведомления" description="Приглашения, обновления задач и события ваших проектов."><Link href="/settings#notifications" className="action-secondary">Настроить</Link><button type="button" onClick={markAllAsRead} disabled={unreadCount === 0 || markingAll || Boolean(pendingNotificationId)} className="action-primary disabled:opacity-50">{markingAll ? 'Сохраняем…' : 'Прочитать всё'}</button><button type="button" onClick={() => loadNotifications(true)} disabled={refreshing} className="action-secondary disabled:opacity-50">{refreshing ? 'Обновляем…' : 'Обновить'}</button></PageHeader>
+      <PageHeader eyebrow="Рабочий центр" title="Уведомления" description="Приглашения, обновления задач и события ваших проектов."><Link href="/settings#notifications" className="action-secondary">Настроить</Link><button type="button" onClick={markAllAsRead} disabled={unreadCount === 0 || markingAll || Boolean(pendingNotificationId)} className="action-primary disabled:opacity-50"><UiText text={markingAll ? 'Сохраняем…' : 'Прочитать всё'}/></button><button type="button" onClick={() => loadNotifications(true)} disabled={refreshing} className="action-secondary disabled:opacity-50"><UiText text={refreshing ? 'Обновляем…' : 'Обновить'}/></button></PageHeader>
 
       {error && (
         <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -410,7 +416,7 @@ export default function NotificationsPage() {
       <section className="mb-6 rounded-xl border bg-white p-5 shadow-sm">
         <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr_1fr]">
           <label className="block">
-            <span className="mb-1 block text-sm font-medium text-gray-700">Поиск</span>
+            <span className="mb-1 block text-sm font-medium text-gray-700"><UiText text={"Поиск"}/></span>
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -444,16 +450,14 @@ export default function NotificationsPage() {
                 setFilterMode('all')
               }}
               className="w-full rounded-lg border bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-            >
-              Сбросить фильтры
-            </button>
+            ><UiText text={"Сбросить фильтры"}/></button>
           </div>
         </div>
       </section>
 
       <section className="rounded-xl border bg-white shadow-sm">
         <div className="border-b px-5 py-4">
-          <h2 className="text-lg font-semibold text-gray-900">Уведомления</h2>
+          <h2 className="text-lg font-semibold text-gray-900"><UiText text={"Уведомления"}/></h2>
           <p className="mt-1 text-sm text-gray-500">
             Показано: {filteredNotifications.length} из {notifications.length}
           </p>

@@ -1,5 +1,7 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { logAppError, showAppMessage } from '@/lib/appFeedback'
@@ -396,9 +398,9 @@ export function ProjectChat({
                                 : 'bg-green-600 text-white hover:bg-green-700'
                             } disabled:opacity-60`}
                           >
-                            {savingMessageEditId === message.id
+                            <UiText text={savingMessageEditId === message.id
                               ? 'Сохраняем...'
-                              : 'Сохранить'}
+                              : 'Сохранить'}/>
                           </button>
 
                           <button
@@ -409,9 +411,7 @@ export function ProjectChat({
                                 ? 'bg-blue-500 text-white border border-blue-200 hover:bg-blue-400'
                                 : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
                             } disabled:opacity-60`}
-                          >
-                            Отмена
-                          </button>
+                          ><UiText text={"Отмена"}/></button>
                         </div>
                       </div>
                     ) : message.is_deleted_for_all ? (

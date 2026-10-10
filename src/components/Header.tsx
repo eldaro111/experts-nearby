@@ -1,10 +1,11 @@
 'use client'
 
 import Link from 'next/link'
+import { UiText } from '@/components/LocaleProvider'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
-import { ArrowUpRight, ChevronDown, Menu, Search, X, LayoutDashboard, CheckSquare, CalendarDays, FolderOpen, Bell, Settings, UserRound, LogOut, Gavel } from 'lucide-react'
+import { ArrowUpRight, ChevronDown, Menu, Search, X, LayoutDashboard, CheckSquare, CalendarDays, FolderOpen, Bell, Sparkles, Settings, UserRound, LogOut, Gavel } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { showAppError } from '@/lib/appFeedback'
 import { NotificationBell } from '@/components/NotificationBell'
@@ -15,8 +16,11 @@ const primaryLinks = [
   { href: '/listings', label: 'Проекты' },
   { href: '/experts', label: 'Эксперты' },
   { href: '/auctions', label: 'Аукционы' },
+  { href: '/universities', label: 'ВУЗам' },
+  { href: '/news', label: 'События и новости' },
 ]
 const workLinks = [
+  { href: '/recommendations', label: 'Рекомендации', icon: Sparkles },
   { href: '/dashboard', label: 'Рабочий центр', icon: LayoutDashboard },
   { href: '/tasks', label: 'Мои задачи', icon: CheckSquare },
   { href: '/calendar', label: 'Календарь', icon: CalendarDays },
@@ -26,6 +30,7 @@ const workLinks = [
 const accountLinks = [
   { href: '/profile', label: 'Мой профиль', icon: UserRound },
   { href: '/notifications', label: 'Уведомления', icon: Bell },
+  { href: '/inquiries', label: 'Обращения', icon: UserRound },
   { href: '/settings', label: 'Настройки', icon: Settings },
 ]
 
@@ -94,10 +99,10 @@ export default function Header() {
       <a href="#main-content" className="skip-link">Перейти к содержимому</a>
       <header ref={headerRef} className="site-header">
         <div className="header-inner">
-          <Link href="/" onClick={closeMenus} className="brand-link" aria-label="Эксперты рядом — главная"><Brand /></Link>
+          <Link href="/" onClick={closeMenus} className="brand-link" aria-label="Эксперты Рядом — главная"><Brand /></Link>
           <nav className="desktop-nav" aria-label="Основная навигация">
-            <Link href="/" onClick={closeMenus} className={`nav-link ${pathname === '/' ? 'is-active' : ''}`} aria-current={pathname === '/' ? 'page' : undefined}>Главная</Link>
-            {primaryLinks.map(({ href, label }) => <Link key={href} href={href} onClick={closeMenus} className={`nav-link ${isActive(href) ? 'is-active' : ''}`} aria-current={isActive(href) ? 'page' : undefined}>{label}</Link>)}
+            <Link href="/" onClick={closeMenus} className={`nav-link ${pathname === '/' ? 'is-active' : ''}`} aria-current={pathname === '/' ? 'page' : undefined}><UiText text={"Главная"}/></Link>
+            {primaryLinks.map(({ href, label }) => <Link key={href} href={href} onClick={closeMenus} className={`nav-link ${isActive(href) ? 'is-active' : ''}`} aria-current={isActive(href) ? 'page' : undefined}><UiText text={label}/></Link>)}
           </nav>
           <div className="header-actions">
             <Link href="/search" onClick={closeMenus} className="icon-button" aria-label="Поиск по платформе"><Search size={21} /></Link>
@@ -109,18 +114,18 @@ export default function Header() {
                 </button>
                 {accountOpen && <div id="account-navigation" className="account-dropdown">
                   <p className="account-email">{user.email}</p>
-                  {accountLinks.map(({ href, label, icon: Icon }) => <Link key={href} href={href} onClick={closeMenus}><Icon size={18} />{label}</Link>)}
-                  <button onClick={handleLogout} disabled={signingOut}><LogOut size={18} />{signingOut ? 'Выходим…' : 'Выйти'}</button>
+                  {accountLinks.map(({ href, label, icon: Icon }) => <Link key={href} href={href} onClick={closeMenus}><Icon size={18} /><UiText text={label}/></Link>)}
+                  <button onClick={handleLogout} disabled={signingOut}><LogOut size={18} /><UiText text={signingOut ? 'Выходим…' : 'Выйти'}/></button>
                 </div>}
               </div>
-            </> : <Link href="/auth" onClick={closeMenus} className="header-login">Войти <ArrowUpRight size={17} /></Link>}
+            </> : <Link href="/auth" onClick={closeMenus} className="header-login"><UiText text={"Войти"}/><ArrowUpRight size={17} /></Link>}
             <button ref={menuButton} type="button" className="icon-button mobile-menu-toggle" onClick={() => setMobileOpen(!mobileOpen)} aria-label={mobileOpen ? 'Закрыть навигацию' : 'Открыть навигацию'} aria-expanded={mobileOpen} aria-controls="mobile-navigation">{mobileOpen ? <X size={23} /> : <Menu size={23} />}</button>
           </div>
         </div>
-        {user && <nav className="work-nav" aria-label="Рабочие разделы"><div className="work-nav-inner">{workLinks.map(({ href, label, icon: Icon }) => <Link key={href} href={href} onClick={closeMenus} className={isActive(href) ? 'is-active' : ''} aria-current={isActive(href) ? 'page' : undefined}><Icon size={17} />{label}</Link>)}</div></nav>}
+        {user && <nav className="work-nav" aria-label="Рабочие разделы"><div className="work-nav-inner">{workLinks.map(({ href, label, icon: Icon }) => <Link key={href} href={href} onClick={closeMenus} className={isActive(href) ? 'is-active' : ''} aria-current={isActive(href) ? 'page' : undefined}><Icon size={17} /><UiText text={label}/></Link>)}</div></nav>}
         {mobileOpen && <nav id="mobile-navigation" className="mobile-navigation" aria-label="Мобильная навигация">
           {[{ href: '/', label: 'Главная' }, ...primaryLinks, { href: '/listings/new', label: 'Создать проект' }, { href: '/search', label: 'Поиск' }].map(({ href, label }) => <Link key={href} href={href} onClick={closeMenus} className={isActive(href) ? 'is-active' : ''} aria-current={isActive(href) ? 'page' : undefined}>{label}<ArrowUpRight size={17} /></Link>)}
-          {user && accountLinks.map(({ href, label }) => <Link key={href} href={href} onClick={closeMenus}>{label}</Link>)}
+          {user && accountLinks.map(({ href, label }) => <Link key={href} href={href} onClick={closeMenus}><UiText text={label}/></Link>)}
         </nav>}
       </header>
     </>

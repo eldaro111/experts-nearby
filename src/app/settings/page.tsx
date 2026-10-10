@@ -1,5 +1,7 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
 import { PageLoading } from '@/components/PageState'
 
 import { PageHeader } from '@/components/PageHeader'
@@ -11,7 +13,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { getAppErrorMessage, logAppError, showAppError, showAppMessage } from '@/lib/appFeedback'
 
-type NotificationKey = 'projects' | 'tasks' | 'files' | 'auctions' | 'reviews' | 'invitations'
+type NotificationKey = 'projects' | 'tasks' | 'files' | 'auctions' | 'reviews' | 'invitations' | 'recommend_projects' | 'recommend_experts'
 type Visibility = 'public' | 'platform_only' | 'hidden'
 
 interface NotificationPrefs {
@@ -21,6 +23,8 @@ interface NotificationPrefs {
   auctions: boolean
   reviews: boolean
   invitations: boolean
+  recommend_projects: boolean
+  recommend_experts: boolean
 }
 
 interface Profile {
@@ -58,9 +62,13 @@ const defaultNotificationPrefs: NotificationPrefs = {
   auctions: true,
   reviews: true,
   invitations: true,
+  recommend_projects: true,
+  recommend_experts: true,
 }
 
 const notificationMeta: Array<{ key: NotificationKey; title: string; description: string }> = [
+  { key: 'recommend_projects', title: 'Рекомендации проектов', description: 'Оповещать о проектах, подходящих вашим навыкам и специализациям.' },
+  { key: 'recommend_experts', title: 'Рекомендации специалистов', description: 'Оповещать о специалистах для ваших открытых проектов. Не более трёх рекомендательных оповещений в сутки суммарно.' },
   { key: 'projects', title: 'Проекты', description: 'Отклики, участники, изменения в проектах.' },
   { key: 'tasks', title: 'Задачи', description: 'Новые задачи, дедлайны, завершение и причины просрочки.' },
   { key: 'files', title: 'Файлы', description: 'Загрузка и изменение проектных материалов.' },
@@ -70,7 +78,7 @@ const notificationMeta: Array<{ key: NotificationKey; title: string; description
 ]
 
 const privacyMeta: Array<{ key: 'show_rate' | 'show_city' | 'show_portfolio' | 'show_availability'; title: string; description: string }> = [
-  { key: 'show_rate', title: 'Показывать ставку', description: 'Ставка будет видна в каталоге и публичном профиле.' },
+  { key: 'show_rate', title: 'Показывать стоимость услуг', description: 'Стоимость будет видна в каталоге и публичном профиле.' },
   { key: 'show_city', title: 'Показывать город', description: 'Город будет виден в карточке эксперта и профиле.' },
   { key: 'show_portfolio', title: 'Показывать портфолио', description: 'Ссылки портфолио будут доступны другим пользователям.' },
   { key: 'show_availability', title: 'Показывать доступность', description: 'Количество часов в неделю будет видно другим пользователям.' },
@@ -103,6 +111,8 @@ const sanitizePrefs = (value: unknown): NotificationPrefs => {
     files: typeof record.files === 'boolean' ? record.files : defaultNotificationPrefs.files,
     auctions: typeof record.auctions === 'boolean' ? record.auctions : defaultNotificationPrefs.auctions,
     reviews: typeof record.reviews === 'boolean' ? record.reviews : defaultNotificationPrefs.reviews,
+    recommend_projects: typeof record.recommend_projects === 'boolean' ? record.recommend_projects : true,
+    recommend_experts: typeof record.recommend_experts === 'boolean' ? record.recommend_experts : true,
     invitations: typeof record.invitations === 'boolean' ? record.invitations : defaultNotificationPrefs.invitations,
   }
 }
@@ -210,7 +220,7 @@ export default function SettingsPage() {
       { label: 'Город', ok: Boolean(profile?.city?.trim()) },
       { label: 'Формат работы', ok: Boolean(profile?.work_format) },
       { label: 'Уровень опыта', ok: Boolean(profile?.experience_level) },
-      { label: 'Ставка', ok: Boolean(profile?.hourly_rate) },
+
       { label: 'Описание', ok: Boolean(profile?.about?.trim()) },
       { label: 'Портфолио', ok: toList(profile?.portfolio_links).length > 0 },
       { label: 'Доступность', ok: Boolean(profile?.availability_hours) },
@@ -329,8 +339,8 @@ export default function SettingsPage() {
           <nav className="space-y-1 text-sm">
             <Anchor href="#account">Аккаунт</Anchor>
             <Anchor href="#profile">Профиль</Anchor>
-            <Anchor href="#notifications">Уведомления</Anchor>
-            <Anchor href="#privacy">Приватность</Anchor>
+            <Anchor href="#notifications"><UiText text={"Уведомления"}/></Anchor>
+            <Anchor href="#privacy"><UiText text={"Приватность"}/></Anchor>
             <Anchor href="#security">Безопасность</Anchor>
             <Anchor href="#data">Данные</Anchor>
           </nav>
@@ -344,17 +354,13 @@ export default function SettingsPage() {
               <Link href="/auth/reset-password" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
                 Сменить пароль
               </Link>
-              <button type="button" onClick={handleLogout} className="rounded-lg border px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                Выйти
-              </button>
+              <button type="button" onClick={handleLogout} className="rounded-lg border px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"><UiText text={"Выйти"}/></button>
             </div>
           </Section>
 
           <Section id="profile" title="Профиль" description="Заполненность анкеты влияет на доверие в каталоге экспертов.">
             <div className="mb-4 flex flex-wrap gap-3">
-              <Link href="/profile" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-                Редактировать профиль
-              </Link>
+              <Link href="/profile" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"><UiText text={"Редактировать профиль"}/></Link>
               <Link href={`/users/${user.id}`} className="rounded-lg border px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
                 Открыть публичный профиль
               </Link>
@@ -392,16 +398,16 @@ export default function SettingsPage() {
           </Section>
 
           <Section id="privacy" title="Приватность" description="Управляет тем, что видно в каталоге экспертов и публичном профиле.">
-            <label className="mb-2 block text-sm font-medium text-gray-700">Видимость профиля</label>
+            <label className="mb-2 block text-sm font-medium text-gray-700"><UiText text={"Видимость профиля"}/></label>
             <select
               value={profile?.visibility || 'public'}
               onChange={(event) => updateProfilePrivacy({ visibility: event.target.value as Visibility })}
               disabled={savingKey === 'visibility'}
               className="mb-4 w-full rounded-lg border bg-white px-3 py-2 text-sm"
             >
-              <option value="public">Публичный</option>
-              <option value="platform_only">Только пользователям платформы</option>
-              <option value="hidden">Скрытый</option>
+              <option value="public"><UiText text={"Публичный"}/></option>
+              <option value="platform_only"><UiText text={"Только пользователям платформы"}/></option>
+              <option value="hidden"><UiText text={"Скрытый"}/></option>
             </select>
 
             {profile?.visibility === 'hidden' && (
@@ -479,8 +485,8 @@ function ToggleRow({ title, description, checked, disabled, onChange }: { title:
   return (
     <label className="flex cursor-pointer items-center justify-between gap-4 p-4 hover:bg-gray-50">
       <span>
-        <span className="block text-sm font-medium text-gray-900">{title}</span>
-        <span className="mt-1 block text-sm text-gray-500">{description}</span>
+        <span className="block text-sm font-medium text-gray-900"><UiText text={title}/></span>
+        <span className="mt-1 block text-sm text-gray-500"><UiText text={description}/></span>
       </span>
       <input
         type="checkbox"

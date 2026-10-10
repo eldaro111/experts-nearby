@@ -1,5 +1,7 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Clock3, MessageSquare, Plus, SlidersHorizontal, ArrowUpRight } from 'lucide-react'
@@ -61,6 +63,7 @@ export default function ListingsPage() {
         const { data, error } = await supabase
           .from('listings_with_count')
           .select('*')
+          .is('completed_at', null)
           .order('created_at', { ascending: false })
         if (error) throw error
         if (active) { setListings(data || []); setFiltered(data || []) }
@@ -248,7 +251,7 @@ export default function ListingsPage() {
   return (
     <div className="page-shell">
       <PageHeader eyebrow="Возможности для совместной работы" title="Найдите свой следующий проект" description="Инженерные задачи и команды, которым нужен ваш опыт.">
-        <Button asChild className="action-primary"><Link href="/listings/new"><Plus size={18} />Создать проект</Link></Button>
+        <Button asChild className="action-primary"><Link href="/listings/new"><Plus size={18} /><UiText text={"Создать проект"}/></Link></Button>
       </PageHeader>
       <section className="filter-panel" aria-label="Фильтры проектов">
         <div className="flex items-center gap-2 text-sm font-semibold mb-4"><SlidersHorizontal size={17} className="text-blue-600" />Подобрать проект</div>
@@ -256,11 +259,11 @@ export default function ListingsPage() {
           <div><label htmlFor="project-query" className="filter-label">Название или описание</label><Input id="project-query" type="search" placeholder="Что вам интересно?" value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)} /></div>
           <div><label htmlFor="project-role" className="filter-label">Ваша роль</label><Input id="project-role" placeholder="Например, инженер" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} /></div>
           <div><label htmlFor="project-skill" className="filter-label">Навык</label><Input id="project-skill" placeholder="Например, CAD" value={skillFilter} onChange={(e) => setSkillFilter(e.target.value)} /></div>
-          <div><label htmlFor="project-timezone" className="filter-label">Часовой пояс</label><Input id="project-timezone" placeholder="Например, UTC+3" value={tzFilter} onChange={(e) => setTzFilter(e.target.value)} /></div>
+          <div><label htmlFor="project-timezone" className="filter-label"><UiText text={"Часовой пояс"}/></label><Input id="project-timezone" placeholder="Например, UTC+3" value={tzFilter} onChange={(e) => setTzFilter(e.target.value)} /></div>
         </div>
       </section>
-      <div className="results-bar"><p aria-live="polite">{loadError ? 'Проекты недоступны' : <>Найдено проектов: <strong className="text-slate-900">{filtered.length}</strong></>}</p><button onClick={resetFilters} disabled={!hasFilters} className="text-blue-700 disabled:text-gray-400 disabled:opacity-60 min-h-11">Сбросить фильтры</button></div>
-      {loadError ? <EmptyState title="Не удалось загрузить проекты" description="Проверьте подключение и попробуйте ещё раз."><Button onClick={() => setLoadAttempt((value) => value + 1)} className="action-primary">Повторить загрузку</Button></EmptyState> : filtered.length === 0 ? <EmptyState title={hasFilters ? 'По этим параметрам проектов нет' : 'Новые проекты появятся здесь'} description={hasFilters ? 'Измените запрос или уберите часть фильтров.' : 'Создайте проект и пригласите специалистов к совместной работе.'}>{hasFilters ? <Button variant="outline" onClick={resetFilters}>Сбросить фильтры</Button> : <Link href="/listings/new" className="text-link">Создать первый проект<Plus size={17} /></Link>}</EmptyState> : (
+      <div className="results-bar"><p aria-live="polite">{loadError ? 'Проекты недоступны' : <><UiText text={"Найдено проектов:"}/><strong className="text-slate-900">{filtered.length}</strong></>}</p><button onClick={resetFilters} disabled={!hasFilters} className="text-blue-700 disabled:text-gray-400 disabled:opacity-60 min-h-11"><UiText text={"Сбросить фильтры"}/></button></div>
+      {loadError ? <EmptyState title="Не удалось загрузить проекты" description="Проверьте подключение и попробуйте ещё раз."><Button onClick={() => setLoadAttempt((value) => value + 1)} className="action-primary">Повторить загрузку</Button></EmptyState> : filtered.length === 0 ? <EmptyState title={hasFilters ? 'По этим параметрам проектов нет' : 'Новые проекты появятся здесь'} description={hasFilters ? 'Измените запрос или уберите часть фильтров.' : 'Создайте проект и пригласите специалистов к совместной работе.'}>{hasFilters ? <Button variant="outline" onClick={resetFilters}><UiText text={"Сбросить фильтры"}/></Button> : <Link href="/listings/new" className="text-link">Создать первый проект<Plus size={17} /></Link>}</EmptyState> : (
         <div className="grid gap-5 md:grid-cols-2">
           {filtered.map((item) => (
             <article key={item.id} className="listing-card">
