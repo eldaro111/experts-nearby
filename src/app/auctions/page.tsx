@@ -1,5 +1,7 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Plus, SlidersHorizontal } from 'lucide-react'
@@ -75,19 +77,19 @@ export default function AuctionsPage() {
   return (
     <div className="page-shell">
       <PageHeader eyebrow="Рынок инженерных решений" title="Аукционы и готовые проекты" description="Найдите заказ на разработку или предложите решение для внедрения, лицензирования и партнёрства.">
-        <Button asChild variant="outline" className="action-secondary"><Link href="/auctions/my">Мои аукционы</Link></Button>
+        <Button asChild variant="outline" className="action-secondary"><Link href="/auctions/my"><UiText text={"Мои аукционы"}/></Link></Button>
         <Button asChild className="action-primary"><Link href="/auctions/new"><Plus size={18} />Создать аукцион</Link></Button>
       </PageHeader>
       <section className="filter-panel" aria-label="Фильтры аукционов">
         <div className="flex items-center gap-2 text-sm font-semibold mb-4"><SlidersHorizontal size={17} className="text-blue-600" />Найти возможность</div>
         <div className="grid gap-4 md:grid-cols-4">
           <div><label htmlFor="auction-type" className="filter-label">Тип аукциона</label><select id="auction-type" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as 'all' | AuctionType)} className="w-full"><option value="all">Все типы</option><option value="request">Заказы на разработку</option><option value="offer">Готовые проекты</option></select></div>
-          <div className="md:col-span-2"><label htmlFor="auction-search" className="filter-label">Поиск</label><Input id="auction-search" type="search" placeholder="Название, задача или решение" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+          <div className="md:col-span-2"><label htmlFor="auction-search" className="filter-label"><UiText text={"Поиск"}/></label><Input id="auction-search" type="search" placeholder="Название, задача или решение" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
           <div><label htmlFor="auction-category" className="filter-label">Категория</label><Input id="auction-category" placeholder="Например, робототехника" value={category} onChange={(e) => setCategory(e.target.value)} /></div>
         </div>
       </section>
-      <div className="results-bar"><p aria-live="polite">{loadError ? 'Аукционы недоступны' : <>Найдено аукционов: <strong className="text-slate-900">{filtered.length}</strong></>}</p><button onClick={resetFilters} disabled={!hasFilters} className="text-blue-700 disabled:text-gray-400 disabled:opacity-60 min-h-11">Сбросить фильтры</button></div>
-      {loadError ? <EmptyState title="Не удалось загрузить аукционы" description="Проверьте подключение и попробуйте ещё раз."><Button className="action-primary" onClick={() => setLoadAttempt((value) => value + 1)}>Повторить загрузку</Button></EmptyState> : filtered.length === 0 ? <EmptyState title={hasFilters ? 'По этим параметрам аукционов нет' : 'Новые аукционы появятся здесь'} description={hasFilters ? 'Попробуйте изменить запрос или сбросить фильтры.' : 'Опубликуйте заказ на разработку или готовый проект.'}>{hasFilters && <Button variant="outline" onClick={resetFilters}>Сбросить фильтры</Button>}</EmptyState> : <div className="grid gap-5 md:grid-cols-2">{filtered.map((auction) => <AuctionCard key={auction.id} auction={auction} />)}</div>}
+      <div className="results-bar"><p aria-live="polite">{loadError ? 'Аукционы недоступны' : <>Найдено аукционов: <strong className="text-slate-900">{filtered.length}</strong></>}</p><button onClick={resetFilters} disabled={!hasFilters} className="text-blue-700 disabled:text-gray-400 disabled:opacity-60 min-h-11"><UiText text={"Сбросить фильтры"}/></button></div>
+      {loadError ? <EmptyState title="Не удалось загрузить аукционы" description="Проверьте подключение и попробуйте ещё раз."><Button className="action-primary" onClick={() => setLoadAttempt((value) => value + 1)}>Повторить загрузку</Button></EmptyState> : filtered.length === 0 ? <EmptyState title={hasFilters ? 'По этим параметрам аукционов нет' : 'Новые аукционы появятся здесь'} description={hasFilters ? 'Попробуйте изменить запрос или сбросить фильтры.' : 'Опубликуйте заказ на разработку или готовый проект.'}>{hasFilters && <Button variant="outline" onClick={resetFilters}><UiText text={"Сбросить фильтры"}/></Button>}</EmptyState> : <div className="grid gap-5 md:grid-cols-2">{filtered.map((auction) => <AuctionCard key={auction.id} auction={auction} />)}</div>}
     </div>
   )
 }

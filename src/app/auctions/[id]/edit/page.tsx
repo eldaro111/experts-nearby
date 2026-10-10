@@ -1,5 +1,7 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
 import { PageLoading } from '@/components/PageState'
 
 import { FormField } from '@/components/FormField'
@@ -600,9 +602,7 @@ export default function EditAuctionPage() {
             type="button"
             onClick={() => router.push(`/auctions/${auction.id}`)}
             className="border px-4 py-2 rounded hover:bg-gray-50 transition"
-          >
-            Отмена
-          </button>
+          ><UiText text={"Отмена"}/></button>
 
           <button
             type="submit"

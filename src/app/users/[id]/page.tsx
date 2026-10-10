@@ -1,8 +1,14 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
 import { PageLoading } from '@/components/PageState'
 
 import Link from 'next/link'
+import { ExpertContact } from '@/components/profile/ExpertContact'
+import { PortfolioFiles } from '@/components/profile/PortfolioFiles'
+import { LanguageDetails } from '@/components/profile/ProfileDetails'
+import { EXPERIENCE_LABELS, priceLabel, type ProfileExtras } from '@/lib/profileOptions'
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
@@ -10,10 +16,10 @@ import { logAppError, showAppError, showAppMessage } from '@/lib/appFeedback'
 import { createNotification } from '@/lib/notifications'
 import { ProfileReviews } from '@/components/profile/ProfileReviews'
 
-interface Profile { user_id: string; display_name: string | null; roles: unknown; skills: unknown; timezone: string | null; availability_hours: number | string | null; city: string | null; work_format: 'remote' | 'onsite' | 'hybrid' | null; experience_level: 'junior' | 'middle' | 'senior' | 'expert' | null; hourly_rate: number | string | null; portfolio_links: unknown; about: string | null; visibility?: 'public' | 'platform_only' | 'hidden' | null }
+interface Profile extends ProfileExtras { user_id: string; display_name: string | null; roles: unknown; skills: unknown; timezone: string | null; availability_hours: number | string | null; city: string | null; work_format: 'remote' | 'onsite' | 'hybrid' | null; experience_level: 'junior' | 'middle' | 'senior' | 'expert' | null; hourly_rate: number | string | null; portfolio_links: unknown; about: string | null; visibility?: 'public' | 'platform_only' | 'hidden' | null }
 interface OwnedProject { id: string; title: string; description?: string | null }
 const workFormatLabel: Record<string, string> = { remote: 'Удалённо', onsite: 'Очно', hybrid: 'Гибрид' }
-const experienceLabel: Record<string, string> = { junior: 'Junior', middle: 'Middle', senior: 'Senior', expert: 'Expert' }
+const experienceLabel = EXPERIENCE_LABELS
 const tagToString = (value: unknown): string => { if (typeof value === 'string') return value.trim(); if (typeof value === 'number' || typeof value === 'boolean') return String(value).trim(); if (value && typeof value === 'object') { const r = value as Record<string, unknown>; return String(r.name ?? r.title ?? r.label ?? r.value ?? r.text ?? '').trim() } return '' }
 const toList = (value: unknown): string[] => { if (!value) return []; if (Array.isArray(value)) return value.map(tagToString).filter(Boolean); if (typeof value === 'string') { const t = value.trim(); if (!t) return []; if ((t.startsWith('[') && t.endsWith(']')) || (t.startsWith('{') && t.endsWith('}'))) { try { return toList(JSON.parse(t)) } catch {} } return t.split(/[;,\n]/).map((i) => i.trim()).filter(Boolean) } return [tagToString(value)].filter(Boolean) }
 const normalizeUrl = (value: unknown) => { const url = String(value ?? '').trim(); if (!url) return '#'; return url.startsWith('http') ? url : `https://${url}` }
@@ -34,7 +40,7 @@ export default function UserProfilePage() {
       const { data: { user } } = await supabase.auth.getUser()
       setCurrentUser(user || null)
       if (user && user.id === id) { router.replace('/profile'); return }
-      const { data, error } = await supabase.from('profiles_public').select('user_id, display_name, roles, skills, timezone, availability_hours, city, work_format, experience_level, hourly_rate, portfolio_links, about, visibility').eq('user_id', id).maybeSingle()
+      const { data, error } = await supabase.from('profiles_public').select('user_id, display_name, roles, skills, timezone, availability_hours, city, work_format, experience_level, hourly_rate, portfolio_links, about, visibility, expert_code, experience_years, price_from, price_unit, languages, university_id, school_id, study_group_id').eq('user_id', id).maybeSingle()
       if (error) { logAppError('Ошибка загрузки профиля:', error); setProfile(null) } else setProfile((data || null) as Profile | null)
       if (user?.id) {
         const { data: projectsData, error: projectsError } = await supabase.from('listings').select('id, title, description').eq('created_by', user.id).order('created_at', { ascending: false })
@@ -163,14 +169,17 @@ export default function UserProfilePage() {
       <div className="mb-6"><Link href="/experts" className="text-sm text-blue-600 hover:underline">← Назад к экспертам</Link></div>
       <div className="bg-white shadow-sm border rounded-xl p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between mb-6">
-          <div><p className="eyebrow mb-3">Эксперт платформы</p><h1 className="text-3xl font-bold">{profile.display_name || 'Без имени'}</h1><p className="text-gray-600 mt-2">{profile.city || 'Город не указан'} · {profile.work_format ? workFormatLabel[profile.work_format] : 'формат не указан'} · {profile.experience_level ? experienceLabel[profile.experience_level] : 'уровень не указан'}</p><p className="text-gray-500 text-sm mt-1">{profile.timezone || 'Часовой пояс не указан'} · {profile.availability_hours ?? 0} ч/нед{profile.hourly_rate ? ` · ${profile.hourly_rate} ₽/час` : ''}</p></div>
+          <div><p className="eyebrow mb-3">Эксперт платформы · {profile.expert_code}</p><h1 className="text-3xl font-bold">{profile.display_name || 'Без имени'}</h1><p className="text-gray-600 mt-2">{profile.city || 'Город не указан'} · {profile.work_format ? workFormatLabel[profile.work_format] : 'формат не указан'} · {experienceLabel[profile.experience_years || profile.experience_level || 'unspecified']}</p><p className="text-gray-500 text-sm mt-1">{profile.timezone || 'Часовой пояс не указан'} · {profile.availability_hours == null ? 'Доступность не указана' : `${profile.availability_hours} ч/нед`} · {priceLabel(profile)}</p></div>
           {currentUser ? ownedProjects.length > 0 ? <div className="border rounded-lg p-3 bg-gray-50 w-full md:w-80"><div className="text-sm font-medium mb-2">Пригласить в проект</div><div className="flex flex-col gap-2"><select aria-label="Проект для приглашения" value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} className="border rounded-lg px-3 py-2 text-sm bg-white"><option value="">Выбрать проект...</option>{ownedProjects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select><button onClick={handleInvite} disabled={inviting} className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-60">{inviting ? 'Приглашаем...' : 'Пригласить'}</button></div></div> : <Link href="/listings/new" className="text-sm text-blue-600 hover:underline">Создать проект, чтобы пригласить эксперта</Link> : <Link href="/auth" className="text-sm text-blue-600 hover:underline">Войдите, чтобы пригласить эксперта</Link>}
         </div>
-        {profile.about && <div className="mb-6"><h2 className="font-semibold mb-2">О себе</h2><p className="text-gray-700 whitespace-pre-line">{profile.about}</p></div>}
+        {profile.about && <div className="mb-6"><h2 className="font-semibold mb-2"><UiText text={"О себе"}/></h2><p className="text-gray-700 whitespace-pre-line">{profile.about}</p></div>}
         <div className="grid md:grid-cols-2 gap-5"><TagBlock title="Роли" items={roles} tone="blue" /><TagBlock title="Навыки" items={skills} /></div>
         {portfolioLinks.length > 0 && <div className="mt-6"><h2 className="font-semibold mb-2">Портфолио</h2><div className="space-y-1">{portfolioLinks.map((link) => <a key={link} href={normalizeUrl(link)} target="_blank" rel="noopener noreferrer" className="block text-sm text-blue-600 hover:underline break-all">{link}</a>)}</div></div>}
       </div>
 
+      <LanguageDetails languages={profile.languages} />
+      <div className="mt-6 rounded-xl border bg-white p-6"><PortfolioFiles userId={profile.user_id} /></div>
+      <ExpertContact expertId={profile.user_id} currentUserId={currentUser?.id} />
       <ProfileReviews userId={profile.user_id} />
     </div>
   )

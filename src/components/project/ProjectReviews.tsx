@@ -13,6 +13,7 @@ type ProjectMemberLike = {
 }
 
 type ListingLike = {
+  completed_at?: string | null
   id: string
   title?: string | null
   created_by: string
@@ -112,6 +113,7 @@ export function ProjectReviews({
   }, [selectedUserId, myReviewsByTarget])
 
   const handleSubmit = async () => {
+    if (!listing.completed_at) { showAppMessage('Отзывы доступны после завершения проекта.'); return }
     if (!currentUserId) {
       showAppMessage('Нужно войти в систему.')
       return
@@ -219,7 +221,7 @@ export function ProjectReviews({
         <div>
           <h2 className="text-xl font-semibold">Отзывы по проекту</h2>
           <p className="text-sm text-gray-500 mt-1">
-            Участники проекта могут оставить оценку и короткий отзыв друг о друге.
+            Участники завершённого проекта могут оставить оценку и короткий отзыв друг о друге.
           </p>
         </div>
 
@@ -228,7 +230,7 @@ export function ProjectReviews({
         </Link>
       </div>
 
-      {reviewTargets.length === 0 ? (
+      {!listing.completed_at ? <p className="rounded-lg border bg-blue-50 p-4 text-sm text-blue-800 mb-5">Оставить отзыв можно после подтверждения завершения проекта автором.</p> : reviewTargets.length === 0 ? (
         <div className="rounded-lg border bg-gray-50 p-4 text-sm text-gray-500">
           Пока нет других участников, которым можно оставить отзыв.
         </div>

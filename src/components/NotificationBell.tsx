@@ -1,5 +1,7 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { Bell } from 'lucide-react'
@@ -114,6 +116,10 @@ export function NotificationBell() {
       }
 
       setUserId(user.id)
+      // Refresh pre-existing matches for this user; server throttles to once per 5 minutes.
+      const { error: recommendationError } = await supabase.rpc('refresh_my_recommendations')
+      if (recommendationError) logAppError('Обновление рекомендаций:', recommendationError)
+      if (!active) return
       await loadNotifications(user.id)
 
       if (!active) return
@@ -263,7 +269,7 @@ export function NotificationBell() {
         <div id="notification-panel" className="notification-panel absolute right-0 z-50 mt-2 w-[380px] max-w-[90vw] overflow-hidden rounded-xl border bg-white shadow-lg">
           <div className="flex items-center justify-between border-b bg-gray-50 px-4 py-3">
             <div>
-              <div className="font-semibold">Уведомления</div>
+              <div className="font-semibold"><UiText text={"Уведомления"}/></div>
               <div className="text-xs text-gray-500">
                 Непрочитанных: {unreadCount}
               </div>

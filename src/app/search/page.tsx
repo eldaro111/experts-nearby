@@ -1,10 +1,13 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
 import { PageLoading } from '@/components/PageState'
 
 import { PageHeader } from '@/components/PageHeader'
 
 import Link from 'next/link'
+import { priceLabel } from '@/lib/profileOptions'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
@@ -71,6 +74,9 @@ type Expert = {
   experience_level: string | null
   about: string | null
   hourly_rate: number | null
+  price_from: number | null
+  price_unit: string
+  expert_code: string
   availability_hours: number | null
   portfolio_links: unknown
 }
@@ -364,7 +370,7 @@ export default function SearchPage() {
 
       supabase
         .from('profiles_public')
-        .select('user_id,display_name,roles,skills,city,work_format,experience_level,about,hourly_rate,availability_hours,portfolio_links')
+        .select('user_id,display_name,roles,skills,city,work_format,experience_level,about,hourly_rate,availability_hours,portfolio_links,price_from,price_unit,expert_code')
         .limit(250),
 
       supabase
@@ -492,7 +498,7 @@ export default function SearchPage() {
       return {
         id: `expert-${expert.user_id}`,
         type: 'expert',
-        title: expert.display_name || 'Эксперт без имени',
+        title: `${expert.expert_code || ''} (${expert.display_name || 'Имя не указано'})`,
         subtitle: [
           expert.city,
           expert.work_format ? workFormatLabel[expert.work_format] || expert.work_format : null,
@@ -506,7 +512,7 @@ export default function SearchPage() {
             .join(' · ') || 'Описание профиля не указано.',
         href: `/users/${expert.user_id}`,
         createdAt: null,
-        badge: expert.hourly_rate ? `${expert.hourly_rate} ₽/час` : undefined,
+        badge: priceLabel(expert),
       }
     })
 
@@ -599,7 +605,7 @@ export default function SearchPage() {
 
   return (
     <div className="page-shell">
-      <PageHeader eyebrow="По всей платформе" title="Найдите нужное" description="Проекты, специалисты, задачи и материалы — одним запросом."><button onClick={() => loadSearchData(true)} disabled={refreshing} className="action-secondary disabled:opacity-60">{refreshing ? 'Обновляем…' : 'Обновить'}</button></PageHeader>
+      <PageHeader eyebrow="По всей платформе" title="Найдите нужное" description="Проекты, специалисты, задачи и материалы — одним запросом."><button onClick={() => loadSearchData(true)} disabled={refreshing} className="action-secondary disabled:opacity-60"><UiText text={refreshing ? 'Обновляем…' : 'Обновить'}/></button></PageHeader>
 
       {errorText && (
         <div className="mb-6 whitespace-pre-line rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800">
@@ -610,7 +616,7 @@ export default function SearchPage() {
       <Section>
         <div className="grid gap-4 md:grid-cols-[1fr_240px]">
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Поиск</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700"><UiText text={"Поиск"}/></label>
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -627,12 +633,12 @@ export default function SearchPage() {
               className="w-full rounded-lg border bg-white px-3 py-2 text-sm"
             >
               <option value="all">Все типы</option>
-              <option value="project">Проекты</option>
+              <option value="project"><UiText text={"Проекты"}/></option>
               <option value="task">Задачи</option>
-              <option value="file">Файлы</option>
-              <option value="auction">Аукционы</option>
-              <option value="expert">Эксперты</option>
-              <option value="notification">Уведомления</option>
+              <option value="file"><UiText text={"Файлы"}/></option>
+              <option value="auction"><UiText text={"Аукционы"}/></option>
+              <option value="expert"><UiText text={"Эксперты"}/></option>
+              <option value="notification"><UiText text={"Уведомления"}/></option>
             </select>
           </div>
         </div>
@@ -660,9 +666,7 @@ export default function SearchPage() {
               setTypeFilter('all')
             }}
             className="text-sm text-blue-700 hover:underline"
-          >
-            Сбросить фильтры
-          </button>
+          ><UiText text={"Сбросить фильтры"}/></button>
         )}
       </div>
 

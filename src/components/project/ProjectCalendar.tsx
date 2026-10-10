@@ -1,5 +1,7 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { logAppError, showAppMessage } from '@/lib/appFeedback'
@@ -617,9 +619,7 @@ export function ProjectCalendar({
             Задачи
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="w-3 h-3 rounded bg-purple-100 border border-purple-200" />
-            События
-          </span>
+            <span className="w-3 h-3 rounded bg-purple-100 border border-purple-200" /><UiText text={"События"}/></span>
           <span className="inline-flex items-center gap-1">
             <span className="w-3 h-3 rounded bg-red-100 border border-red-200" />
             Просрочка

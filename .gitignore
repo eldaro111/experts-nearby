@@ -52,3 +52,6 @@ phase*.zip
 review-summary.json
 README_TZ05_BASELINE_REVIEW.md
 supabase/.temp/
+
+# Local regression screenshots and reports
+/test-results/

@@ -1,5 +1,7 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
 import { PageLoading } from '@/components/PageState'
 
 import { PageHeader } from '@/components/PageHeader'
@@ -484,7 +486,7 @@ export default function DashboardPage() {
 
   return (
     <div className="page-shell">
-      <PageHeader eyebrow="Личный центр" title="Рабочий центр" description="Проекты, задачи и ближайшие сроки. Всё, что требует вашего внимания."><Link href="/listings/new" className="action-primary">Создать проект</Link><Link href="/auctions/new" className="action-secondary">Создать аукцион</Link><button onClick={() => loadDashboard(true)} disabled={refreshing} className="action-secondary disabled:opacity-60">{refreshing ? 'Обновляем…' : 'Обновить'}</button></PageHeader>
+      <PageHeader eyebrow="Личный центр" title="Рабочий центр" description="Проекты, задачи и ближайшие сроки. Всё, что требует вашего внимания."><Link href="/listings/new" className="action-primary"><UiText text={"Создать проект"}/></Link><Link href="/auctions/new" className="action-secondary">Создать аукцион</Link><button onClick={() => loadDashboard(true)} disabled={refreshing} className="action-secondary disabled:opacity-60"><UiText text={refreshing ? 'Обновляем…' : 'Обновить'}/></button></PageHeader>
 
       {errors.length > 0 && (
         <div className="mt-6 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-900">
@@ -590,7 +592,7 @@ export default function DashboardPage() {
         </div>
 
         <aside className="space-y-6">
-          <Card title="Ближайшее" action={<Link href="/calendar" className="text-sm font-semibold text-blue-700 hover:underline">Календарь</Link>}>
+          <Card title="Ближайшее" action={<Link href="/calendar" className="text-sm font-semibold text-blue-700 hover:underline"><UiText text={"Календарь"}/></Link>}>
             {upcomingDeadlines.length === 0 ? (
               <EmptyState>Ближайших сроков пока нет.</EmptyState>
             ) : (

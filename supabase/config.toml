@@ -1,0 +1,6 @@
+project_id = "experts-nearby"
+
+[functions.portfolio]
+# JWT is always verified explicitly with auth.getUser() inside this function.
+# Supports current Supabase signing keys without relying on the legacy gateway verifier.
+verify_jwt = false

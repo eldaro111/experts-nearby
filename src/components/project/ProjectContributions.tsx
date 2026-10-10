@@ -1,5 +1,7 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { createNotification } from '@/lib/notifications'
@@ -540,18 +542,16 @@ export function ProjectContributions({
                         disabled={savingContributionId === contribution.id}
                         className="bg-green-600 text-white text-sm px-3 py-1 rounded hover:bg-green-700 transition disabled:opacity-60"
                       >
-                        {savingContributionId === contribution.id
+                        <UiText text={savingContributionId === contribution.id
                           ? 'Сохраняем...'
-                          : 'Сохранить'}
+                          : 'Сохранить'}/>
                       </button>
 
                       <button
                         onClick={cancelEditContribution}
                         disabled={savingContributionId === contribution.id}
                         className="bg-gray-200 text-gray-800 text-sm px-3 py-1 rounded hover:bg-gray-300 transition disabled:opacity-60"
-                      >
-                        Отмена
-                      </button>
+                      ><UiText text={"Отмена"}/></button>
                     </div>
                   </div>
                 ) : (

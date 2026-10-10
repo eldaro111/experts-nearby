@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { logAppError, showAppError, showAppMessage } from '@/lib/appFeedback'
+import { ProjectCompletion } from '@/components/project/ProjectCompletion'
 import { ProjectHeader } from '@/components/project/ProjectHeader'
 import { ProjectAccessStatus } from '@/components/project/ProjectAccessStatus'
 import { ProjectFiles } from '@/components/project/ProjectFiles'
@@ -322,6 +323,7 @@ export default function ProjectWorkspacePage() {
 
   return (
     <div id="project-top" className="page-shell">
+      <ProjectCompletion projectId={listing.id} isAuthor={user?.id === listing.created_by} completedAt={listing.completed_at} onCompleted={date=>setListing({...listing,completed_at:date})} />
       <ProjectHeader
         listing={listing}
         isAuthor={isAuthor}
@@ -348,6 +350,7 @@ export default function ProjectWorkspacePage() {
 
         <div className="min-w-0 space-y-10">
           <section id="plan" className="scroll-mt-24 space-y-10">
+            <fieldset disabled={Boolean(listing.completed_at)} className="min-w-0">
             <ProjectTasks
               projectId={id}
               currentUserId={user?.id}
@@ -357,6 +360,7 @@ export default function ProjectWorkspacePage() {
               tasksLoading={tasksLoading}
               onTasksChanged={refreshTasks}
             />
+            </fieldset>
 
             <ProjectCalendar
               projectId={id}

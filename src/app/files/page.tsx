@@ -1,5 +1,7 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
 import { PageLoading } from '@/components/PageState'
 
 import { PageHeader } from '@/components/PageHeader'
@@ -277,9 +279,7 @@ export default function FilesPage() {
           <Link
             href="/auth"
             className="inline-flex rounded-lg bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700"
-          >
-            Войти
-          </Link>
+          ><UiText text={"Войти"}/></Link>
         </div>
       </div>
     )
@@ -287,7 +287,7 @@ export default function FilesPage() {
 
   return (
     <div className="page-shell">
-      <PageHeader eyebrow="Рабочий центр" title="Файлы проектов" description="Чертежи, документы, код и другие материалы из доступных вам проектов."><Link href="/dashboard" className="action-secondary">Рабочий центр</Link></PageHeader>
+      <PageHeader eyebrow="Рабочий центр" title="Файлы проектов" description="Чертежи, документы, код и другие материалы из доступных вам проектов."><Link href="/dashboard" className="action-secondary"><UiText text={"Рабочий центр"}/></Link></PageHeader>
 
       {error && (
         <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -439,9 +439,7 @@ export default function FilesPage() {
                     <Link
                       href={`/projects/${file.project_id}`}
                       className="rounded-lg border px-4 py-2 text-sm text-gray-700 transition hover:bg-gray-50"
-                    >
-                      Открыть проект
-                    </Link>
+                    ><UiText text={"Открыть проект"}/></Link>
                   </div>
                 </div>
               </div>

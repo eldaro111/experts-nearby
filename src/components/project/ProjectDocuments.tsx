@@ -1,5 +1,7 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { logAppError, showAppMessage } from '@/lib/appFeedback'
@@ -358,18 +360,16 @@ export function ProjectDocuments({
                     disabled={savingDocumentId === selectedDocument.id}
                     className="bg-green-600 text-white text-sm px-3 py-1 rounded hover:bg-green-700 transition disabled:opacity-60"
                   >
-                    {savingDocumentId === selectedDocument.id
+                    <UiText text={savingDocumentId === selectedDocument.id
                       ? 'Сохраняем...'
-                      : 'Сохранить'}
+                      : 'Сохранить'}/>
                   </button>
 
                   <button
                     onClick={cancelEditDocument}
                     disabled={savingDocumentId === selectedDocument.id}
                     className="bg-gray-200 text-gray-800 text-sm px-3 py-1 rounded hover:bg-gray-300 transition disabled:opacity-60"
-                  >
-                    Отмена
-                  </button>
+                  ><UiText text={"Отмена"}/></button>
                 </div>
               </div>
             ) : (

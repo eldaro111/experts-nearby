@@ -1,5 +1,7 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
 import { PageLoading } from '@/components/PageState'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -272,9 +274,9 @@ export default function MyAuctionsPage() {
     <div className="page-shell">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold">Мои аукционы</h1>
+          <h1 className="text-3xl font-bold"><UiText text={"Мои аукционы"}/></h1>
           <p className="text-gray-600 mt-2">
-            Управление созданными аукционами и предложениями, которые ты подавал на чужие проекты.
+            Управление созданными аукционами и предложениями, которые вы подавали на чужие проекты.
           </p>
         </div>
 
@@ -345,7 +347,7 @@ export default function MyAuctionsPage() {
         <section>
           {ownedAuctions.length === 0 ? (
             <div className="text-center text-gray-500 border rounded-xl bg-white p-8">
-              Ты ещё не создавал аукционы.
+              Вы ещё не создавали аукционов.
             </div>
           ) : (
             <div className="grid gap-6 md:grid-cols-2">
@@ -417,7 +419,7 @@ export default function MyAuctionsPage() {
         <section>
           {myBids.length === 0 ? (
             <div className="text-center text-gray-500 border rounded-xl bg-white p-8">
-              Ты ещё не подавал предложения на аукционы.
+              Вы ещё не подавали предложений на аукционы.
             </div>
           ) : (
             <div className="grid gap-4">

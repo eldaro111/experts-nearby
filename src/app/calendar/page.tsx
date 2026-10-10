@@ -1,5 +1,7 @@
 'use client'
 
+import { UiText } from '@/components/LocaleProvider'
+
 import { PageLoading } from '@/components/PageState'
 
 import { PageHeader } from '@/components/PageHeader'
@@ -450,7 +452,7 @@ export default function CalendarPage() {
 
   return (
     <div className="page-shell">
-      <PageHeader eyebrow="Рабочий центр" title="Календарь" description="Дедлайны, начало работ и события ваших проектов."><Link href="/tasks" className="action-secondary">Мои задачи</Link><button onClick={() => loadCalendar(true)} disabled={refreshing} className="action-secondary disabled:opacity-60">{refreshing ? 'Обновляем…' : 'Обновить'}</button></PageHeader>
+      <PageHeader eyebrow="Рабочий центр" title="Календарь" description="Дедлайны, начало работ и события ваших проектов."><Link href="/tasks" className="action-secondary"><UiText text={"Мои задачи"}/></Link><button onClick={() => loadCalendar(true)} disabled={refreshing} className="action-secondary disabled:opacity-60"><UiText text={refreshing ? 'Обновляем…' : 'Обновить'}/></button></PageHeader>
 
       {errors.length > 0 && (
         <div className="mb-6 rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800">
@@ -485,7 +487,7 @@ export default function CalendarPage() {
       <section className="mb-6 rounded-xl border bg-white p-5 shadow-sm">
         <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr_1fr_auto]">
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Поиск</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700"><UiText text={"Поиск"}/></label>
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
@@ -519,7 +521,7 @@ export default function CalendarPage() {
             >
               <option value="all">Все типы</option>
               <option value="tasks">Задачи</option>
-              <option value="events">События</option>
+              <option value="events"><UiText text={"События"}/></option>
               <option value="deadlines">Дедлайны</option>
               <option value="overdue">Просроченные</option>
             </select>
