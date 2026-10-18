@@ -25,10 +25,10 @@ export function proxy(req: NextRequest) {
 
   // если надо сменить пароль по recovery — пускаем только в auth
   if (needsPwReset && !allowed) {
-    const url = req.nextUrl.clone()
-    url.pathname = '/auth/reset-password'
-    return NextResponse.redirect(url)
-  }
+  const url = req.nextUrl.clone()
+  url.pathname = '/auth/set-password'
+  return NextResponse.redirect(url)
+}
 
   // если надо установить пароль (новый юзер по magiclink) — пускаем только в auth
   if (needsPwSetup && !allowed) {
