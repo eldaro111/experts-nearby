@@ -1,5 +1,7 @@
 'use client'
 
+import { STARTUP_STAGES, STARTUP_TERMS, type StartupFieldsValue } from '@/lib/startups'
+
 import { UiText } from '@/components/LocaleProvider'
 
 import { PageLoading } from '@/components/PageState'
@@ -10,7 +12,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { logAppError, showAppError, showAppMessage } from '@/lib/appFeedback'
 import { createNotification } from '@/lib/notifications'
 
-interface Listing {
+interface Listing extends Partial<StartupFieldsValue> {
   id: string
   title: string
   description: string
@@ -673,7 +675,8 @@ const handleLeaveProject = async () => {
 
   return (
     <div className="page-shell">
-      <p className="eyebrow mb-3">Инженерный проект</p>
+      <p className="eyebrow mb-3">{listing.project_kind === 'startup' ? 'Стартап · поиск команды' : 'Инженерный проект'}</p>
+      {listing.project_kind === 'startup' && <div className="flex flex-wrap gap-2 mb-4"><span className="skill-tag">{listing.startup_stage && STARTUP_STAGES[listing.startup_stage]}</span><span className="skill-tag">{listing.participation_terms && STARTUP_TERMS[listing.participation_terms]}</span></div>}
       <h1 className="text-3xl font-bold mb-4">{listing.title}</h1>
       <p className="text-gray-700 mb-6">{listing.description}</p>
 

@@ -1,5 +1,8 @@
 'use client'
 
+import { StartupFields } from '@/components/StartupFields'
+import { EMPTY_STARTUP, startupPayload } from '@/lib/startups'
+
 import { UiText } from '@/components/LocaleProvider'
 
 import { UniversityFields } from '@/components/UniversityFields'
@@ -56,6 +59,7 @@ export default function EditListingPage() {
       const { error } = await supabase
         .from('listings')
         .update({
+          ...startupPayload({ ...EMPTY_STARTUP, ...listing }),
           title: cleanTitle,
           description: cleanDescription,
           roles_needed: Array.isArray(listing.roles_needed) ? listing.roles_needed : String(listing.roles_needed || '').split(',').map(s=>s.trim()).filter(Boolean),
@@ -97,6 +101,7 @@ export default function EditListingPage() {
       </h1>
 
       <div className="space-y-5 rounded-2xl border bg-white p-6">
+        <StartupFields value={{ ...EMPTY_STARTUP, ...listing }} onChange={value => setListing({ ...listing, ...value })} />
         <FormField label="Название проекта"><input
           type="text"
           value={listing.title || ''}

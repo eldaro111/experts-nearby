@@ -19,6 +19,7 @@ try {
     '20260823110300_project_files_storage.sql',
     '20261004090000_pilot_feedback.sql',
     '20261004150000_recommendations.sql',
+    '20261019160000_startup_projects.sql',
   ]) {
     let sql = readFileSync(`${root}/supabase/migrations/${filename}`, 'utf8')
     if (filename.includes('baseline')) sql = `begin;\n${sql}\ncommit;`

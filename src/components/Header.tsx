@@ -16,6 +16,8 @@ const primaryLinks = [
   { href: '/listings', label: 'Проекты' },
   { href: '/experts', label: 'Эксперты' },
   { href: '/auctions', label: 'Аукционы' },
+  { href: '/startups', label: 'Стартапам' },
+  { href: '/help', label: 'Помощь' },
   { href: '/universities', label: 'ВУЗам' },
   { href: '/news', label: 'События и новости' },
 ]

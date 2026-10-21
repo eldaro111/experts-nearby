@@ -1,5 +1,8 @@
 'use client'
 
+import { StartupFields } from '@/components/StartupFields'
+import { EMPTY_STARTUP, startupPayload } from '@/lib/startups'
+
 import { UiText } from '@/components/LocaleProvider'
 
 import React, { useEffect, useState } from 'react'
@@ -17,6 +20,7 @@ import { Input } from '@/components/ui/input'
 
 export default function NewListingPage() {
   const router = useRouter()
+  const [startup, setStartup] = useState(EMPTY_STARTUP)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [roles, setRoles] = useState('')
@@ -27,7 +31,9 @@ export default function NewListingPage() {
   const [contactId,setContactId] = useState('')
   const [contactError,setContactError] = useState('')
   useEffect(() => {
-    const contact = new URLSearchParams(window.location.search).get('contact')
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('kind') === 'startup' && !params.get('contact')) setStartup({ project_kind: 'startup', startup_stage: 'idea', participation_terms: 'paid' })
+    const contact = params.get('contact')
     if (!contact) return
     setContactId(contact)
     supabase.from('contact_requests').select('id,body,status,project_id,sender_id').eq('id',contact).single().then(async ({data,error}) => {
@@ -84,7 +90,7 @@ export default function NewListingPage() {
       } else {
         const result = await supabase.from('listings').insert({
           title: cleanTitle, description: cleanDescription, roles_needed: rolesList, skills: skillsList,
-          timezone: timezone || null, created_by: user.id, user_id: user.id, ...university,
+          ...startupPayload(startup), timezone: timezone || null, created_by: user.id, user_id: user.id, ...university,
         }).select('id').single()
         projectId = result.data?.id || null; error = result.error
       }
@@ -110,6 +116,7 @@ export default function NewListingPage() {
       {contactError && <p role="alert" className="mb-4 text-red-700">{contactError}</p>}
       {contactId && !contactError && <p className="mb-4 rounded-lg bg-blue-50 p-4 text-sm text-blue-800">Описание перенесено из обращения. Уточните задачу: после создания эксперт получит приглашение в проект.</p>}
       <form onSubmit={handleSubmit} className="space-y-6" aria-busy={loading}>
+        {!contactId && <StartupFields value={startup} onChange={setStartup} />}
         <div><label className="filter-label" htmlFor="listing-title">Название проекта <span className="text-blue-600">*</span></label><Input id="listing-title" placeholder="Например, система управления протезом кисти" value={title} onChange={(e) => setTitle(e.target.value)} required /></div>
         <div><label className="filter-label" htmlFor="listing-description">Задача и ожидаемый результат <span className="text-blue-600">*</span></label><textarea id="listing-description" className="w-full min-h-44" placeholder="Что нужно сделать? На каком этапе проект? Какой результат вы ожидаете?" value={description} onChange={(e) => setDescription(e.target.value)} required /></div>
         <div className="border-t pt-6"><h2 className="text-lg font-semibold mb-5">Кого вы ищете</h2><div className="grid gap-5 sm:grid-cols-2">

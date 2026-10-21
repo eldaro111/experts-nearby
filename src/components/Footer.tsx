@@ -16,6 +16,9 @@ export function Footer() {
             </p>
           </div>
           <nav aria-label="Навигация в подвале">
+            <Link href="/startups">Стартапам</Link>
+            <Link href="/help">Инструкции</Link>
+            <Link href="/help/faq">FAQ</Link>
             <Link href="/universities">
               <UiText text="ВУЗам" />
             </Link>

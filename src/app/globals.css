@@ -416,4 +416,4 @@
   .page-actions { width: 100%; }
 }
 
-@media (min-width: 801px) and (max-width: 1120px) { .desktop-nav { display: none; } .mobile-menu-toggle { display: inline-flex; } .mobile-navigation { display: grid; padding: 1rem 2rem; border-top: 1px solid #e5ecf7; } .mobile-navigation a { padding: .75rem; } }
+@media (min-width: 801px) and (max-width: 1280px) { .desktop-nav { display: none; } .mobile-menu-toggle { display: inline-flex; } .mobile-navigation { display: grid; padding: 1rem 2rem; border-top: 1px solid #e5ecf7; } .mobile-navigation a { padding: .75rem; } }
