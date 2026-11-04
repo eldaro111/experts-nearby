@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabaseClient'
 import { createNotification } from '@/lib/notifications'
 import { createProjectActivity } from '@/lib/projectActivity'
 import { logAppError, showAppMessage } from '@/lib/appFeedback'
+import { openProjectFile, prepareProjectFiles, progressLabel } from '@/lib/projectStorage/client'
+import { MAX_BYTES, MAX_FILES, PACK_FORMAT, PACK_MIME, type PreparedFile, type Progress } from '@/lib/projectStorage/format'
 
 import type {
   ProjectFile,
@@ -58,11 +60,19 @@ export function ProjectFiles({
   tasks,
 }: ProjectFilesProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const folderInputRef = useRef<HTMLInputElement | null>(null)
+  const processingRef = useRef<AbortController | null>(null)
 
   const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([])
   const [filesLoading, setFilesLoading] = useState(false)
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [selectedFolder, setSelectedFolder] = useState<File[]>([])
+  const [uploadMode, setUploadMode] = useState<'single' | 'folder'>('single')
+  const [optimizeFile, setOptimizeFile] = useState(true)
+  const [compressionReady, setCompressionReady] = useState(false)
+  const [progress, setProgress] = useState<Progress | null>(null)
+  const [uploadMessage, setUploadMessage] = useState('')
   const [uploadingFile, setUploadingFile] = useState(false)
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null)
   const [openingFileId, setOpeningFileId] = useState<string | null>(null)
@@ -71,6 +81,14 @@ export function ProjectFiles({
   const [newFileDescription, setNewFileDescription] = useState('')
   const [newFileVersion, setNewFileVersion] = useState('')
   const [newFileTaskId, setNewFileTaskId] = useState('')
+
+  useEffect(() => {
+    let active = true
+    void supabase.rpc('project_file_storage_version').then(({ data, error }) => {
+      if (active) setCompressionReady(!error && data === 1)
+    })
+    return () => { active = false; processingRef.current?.abort() }
+  }, [])
 
   useEffect(() => {
     const fetchProjectFiles = async () => {
@@ -231,166 +249,152 @@ export function ProjectFiles({
   }
 
   const handleUploadFile = async () => {
-    if (!selectedFile) {
-      showAppMessage('Выберите файл.')
-      return
+    if (uploadingFile || openingFileId) return
+    if (!currentUserId) { showAppMessage('Пользователь не найден.'); return }
+    const folder = uploadMode === 'folder'
+    const inputs = folder ? selectedFolder : selectedFile ? [selectedFile] : []
+    if (!inputs.length) { showAppMessage(folder ? 'Выберите папку сборки.' : 'Выберите файл.'); return }
+    if (inputs.length > MAX_FILES || inputs.reduce((size, file) => size + file.size, 0) > MAX_BYTES) {
+      showAppMessage('Лимит одной загрузки — 500 МиБ исходных данных и 2000 файлов.'); return
     }
-
-    if (!currentUserId) {
-      showAppMessage('Пользователь не найден.')
-      return
-    }
-
-    const fileToUpload = selectedFile
-
-    if (fileToUpload.size > 524288000) {
-      showAppMessage('Максимальный размер файла — 500 МиБ.')
-      return
-    }
-
+    if (!folder && inputs[0].size === 0) { showAppMessage('Пустой файл нельзя загрузить отдельно.'); return }
+    if (folder && !compressionReady) { showAppMessage('Загрузка сборок пока недоступна. Можно загрузить обычный файл.'); return }
+    const name = folder ? `${inputs[0].webkitRelativePath.split('/')[0]}.zip` : inputs[0].name
+    const mime = folder ? 'application/zip' : inputs[0].type
+    const fileToUpload = { name, type: mime }
+    let prepared: PreparedFile | null = null
+    let fileSaved = false
+    const controller = new AbortController()
+    processingRef.current = controller
     setUploadingFile(true)
-
-    const { data: reservationData, error: reservationError } =
-      await supabase.rpc('reserve_project_file_upload_secure', {
-        p_expected_user_id: currentUserId,
-        p_project_id: projectId,
-        p_file_name: fileToUpload.name,
-        p_file_size: fileToUpload.size,
-        p_mime_type: fileToUpload.type || null,
-        p_category: newFileCategory,
-        p_description: newFileDescription.trim() || null,
-        p_version_label: newFileVersion.trim() || null,
-        p_task_id: newFileTaskId || null,
+    setUploadMessage('')
+    try {
+      if (folder || (optimizeFile && compressionReady)) {
+        setProgress({ stage: 'packing', done: 0, total: inputs.reduce((n, f) => n + f.size, 0) })
+        prepared = await prepareProjectFiles(inputs.map(file => ({
+          path: folder ? file.webkitRelativePath : file.name,
+          blob: file,
+          lastModified: file.lastModified,
+        })), folder ? 'folder' : 'single', setProgress, controller.signal)
+      }
+      if (controller.signal.aborted) return
+      // Cancellation terminates preparation/restoration only. A Storage upload has its own reservation lifecycle.
+      processingRef.current = null
+      const body = prepared?.blob || inputs[0]
+      const packed = prepared?.storageFormat === PACK_FORMAT
+      const params = {
+        p_expected_user_id: currentUserId, p_project_id: projectId,
+        p_file_name: name, p_file_size: body.size, p_mime_type: mime || null,
+        p_category: newFileCategory, p_description: newFileDescription.trim() || null,
+        p_version_label: newFileVersion.trim() || null, p_task_id: newFileTaskId || null,
+      }
+      const { data: reservationData, error: reservationError } = packed && prepared
+        ? await supabase.rpc('reserve_project_file_pack_secure', {
+            ...params, p_original_size: prepared.originalSize, p_file_count: prepared.fileCount,
+            p_pack_kind: prepared.kind, p_storage_sha256: prepared.sha256,
+          })
+        : await supabase.rpc('reserve_project_file_upload_secure', params)
+      if (reservationError) throw new Error('Не удалось подготовить загрузку: ' + reservationError.message)
+      const reservation = firstRpcRow<UploadReservation>(reservationData)
+      if (!reservation?.reservation_id || !reservation.file_path) throw new Error('Сервер не вернул резервацию загрузки.')
+      setProgress({ stage: 'uploading', done: 0, total: 0 })
+      const { error: uploadError } = await supabase.storage.from('project-files').upload(reservation.file_path, body, {
+        upsert: false, contentType: packed ? PACK_MIME : mime || undefined,
+      })
+      if (uploadError) {
+        await cancelReservation(reservation.reservation_id, reservation.file_path)
+        if (/maximum allowed size|exceeded.*size|payload too large/i.test(uploadError.message)) {
+          throw new Error('Файл превышает лимит хранилища. Разделите сборку на части или обратитесь к администратору сайта.')
+        }
+        throw new Error('Не удалось загрузить файл: ' + uploadError.message)
+      }
+      const projectFileId = await finalizeReservation(reservation.reservation_id)
+      if (!projectFileId) {
+        showAppMessage('Файл загружен, но регистрация не завершена. Не загружайте повторно. Обратитесь в поддержку и укажите номер: ' + reservation.reservation_id)
+        return
+      }
+      fileSaved = true
+      await createProjectActivity({
+        projectId,
+        actorId: currentUserId,
+        type: 'file_uploaded',
+        title: `Загружен файл «${fileToUpload.name}»`,
+        body: `Категория: ${fileCategoryLabel(newFileCategory)}.`,
+        entityType: 'project_file',
+        entityId: projectFileId,
+        metadata: {
+          file_name: fileToUpload.name,
+          file_path: reservation.file_path,
+          category: newFileCategory,
+          task_id: newFileTaskId || null,
+        },
       })
 
-    if (reservationError) {
+      const notificationRecipients = members.filter(
+        (member) => member.user_id !== currentUserId
+      )
+
+      await Promise.all(
+        notificationRecipients.map((member) =>
+          createNotification({
+            recipientId: member.user_id,
+            actorId: currentUserId,
+            projectId,
+            type: 'project_file_uploaded',
+            title: 'В проект загружен новый файл',
+            body: `Загружен файл «${fileToUpload.name}».`,
+            href: `/projects/${projectId}`,
+            payload: {
+              project_id: projectId,
+              file_name: fileToUpload.name,
+              file_path: reservation.file_path,
+              category: newFileCategory,
+              task_id: newFileTaskId || null,
+            },
+          })
+        )
+      )
+
+      setSelectedFile(null)
+      setSelectedFolder([])
+      setNewFileCategory('other')
+      setNewFileDescription('')
+      setNewFileVersion('')
+      setNewFileTaskId('')
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      if (folderInputRef.current) folderInputRef.current.value = ''
+      const saved = prepared ? prepared.originalSize - body.size : 0
+      setUploadMessage(saved > 0 && packed
+        ? `Загружено. Сэкономлено ${formatFileSize(saved)} (${Math.round(saved / prepared!.originalSize * 100)}%).`
+        : 'Файл загружен.')
+      await refreshProjectFiles()
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return
+      logAppError('Ошибка загрузки файла:', error)
+      showAppMessage(fileSaved ? 'Файл сохранён, но обновить список не удалось. Обновите страницу.' : error instanceof Error ? error.message : 'Не удалось загрузить файл.')
+    } finally {
       setUploadingFile(false)
-      logAppError(
-        'Ошибка резервирования загрузки:',
-        reservationError
-      )
-      showAppMessage(
-        'Не удалось подготовить загрузку: ' +
-          reservationError.message
-      )
-      return
+      setProgress(null)
+      processingRef.current = null
     }
-
-    const reservation =
-      firstRpcRow<UploadReservation>(reservationData)
-
-    if (!reservation?.reservation_id || !reservation.file_path) {
-      setUploadingFile(false)
-      showAppMessage('Сервер не вернул резервацию загрузки.')
-      return
-    }
-
-    const { error: uploadError } = await supabase.storage
-      .from('project-files')
-      .upload(reservation.file_path, fileToUpload, {
-        upsert: false,
-        contentType: fileToUpload.type || undefined,
-      })
-
-    if (uploadError) {
-      await cancelReservation(
-        reservation.reservation_id,
-        reservation.file_path
-      )
-
-      setUploadingFile(false)
-      logAppError('Ошибка загрузки файла в Storage:', uploadError)
-      showAppMessage('Ошибка загрузки файла: ' + uploadError.message)
-      return
-    }
-
-    const projectFileId = await finalizeReservation(
-      reservation.reservation_id
-    )
-
-    if (!projectFileId) {
-      setUploadingFile(false)
-      showAppMessage(
-        'Файл попал в хранилище, но регистрация не завершилась. ' +
-          'Не загружайте его повторно и сохраните текст ошибки из консоли.'
-      )
-      return
-    }
-
-    await createProjectActivity({
-      projectId,
-      actorId: currentUserId,
-      type: 'file_uploaded',
-      title: `Загружен файл «${fileToUpload.name}»`,
-      body: `Категория: ${fileCategoryLabel(newFileCategory)}.`,
-      entityType: 'project_file',
-      entityId: projectFileId,
-      metadata: {
-        file_name: fileToUpload.name,
-        file_path: reservation.file_path,
-        category: newFileCategory,
-        task_id: newFileTaskId || null,
-      },
-    })
-
-    const notificationRecipients = members.filter(
-      (member) => member.user_id !== currentUserId
-    )
-
-    await Promise.all(
-      notificationRecipients.map((member) =>
-        createNotification({
-          recipientId: member.user_id,
-          actorId: currentUserId,
-          projectId,
-          type: 'project_file_uploaded',
-          title: 'В проект загружен новый файл',
-          body: `Загружен файл «${fileToUpload.name}».`,
-          href: `/projects/${projectId}`,
-          payload: {
-            project_id: projectId,
-            file_name: fileToUpload.name,
-            file_path: reservation.file_path,
-            category: newFileCategory,
-            task_id: newFileTaskId || null,
-          },
-        })
-      )
-    )
-
-    setSelectedFile(null)
-    setNewFileCategory('other')
-    setNewFileDescription('')
-    setNewFileVersion('')
-    setNewFileTaskId('')
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
-    }
-
-    setUploadingFile(false)
-    await refreshProjectFiles()
   }
 
   const handleOpenFile = async (file: ProjectFile) => {
+    if (openingFileId || uploadingFile) return
     setOpeningFileId(file.id)
-
-    const { data, error } = await supabase.storage
-      .from('project-files')
-      .createSignedUrl(file.file_path, 60 * 5)
-
-    setOpeningFileId(null)
-
-    if (error || !data?.signedUrl) {
-      logAppError('Ошибка открытия файла:', error)
-      showAppMessage(
-        'Ошибка открытия файла: ' +
-          (error?.message || 'signed URL не создан')
-      )
-      return
+    const controller = new AbortController()
+    processingRef.current = controller
+    try {
+      await openProjectFile(file, setProgress, controller.signal)
+    } catch (error) {
+      if (!(error instanceof Error && error.name === 'AbortError')) {
+        showAppMessage(error instanceof Error ? error.message : 'Не удалось открыть файл.')
+      }
+    } finally {
+      setOpeningFileId(null)
+      setProgress(null)
+      processingRef.current = null
     }
-
-    window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
   }
 
   const handleDeleteFile = async (file: ProjectFile) => {
@@ -478,17 +482,33 @@ export function ProjectFiles({
       <div className="border rounded-lg p-4 bg-gray-50 mb-6">
         <h3 className="font-semibold mb-3">Загрузить файл</h3>
 
-        <div className="space-y-3">
+        <fieldset disabled={uploadingFile || !!openingFileId} className="space-y-3">
+          {compressionReady && (
+            <div className="flex flex-wrap gap-3 text-sm" role="group" aria-label="Способ загрузки">
+              <label className="flex items-center gap-2"><input type="radio" checked={uploadMode === 'single'} onChange={() => setUploadMode('single')} />Отдельный файл</label>
+              <label className="flex items-center gap-2"><input type="radio" checked={uploadMode === 'folder'} onChange={() => setUploadMode('folder')} />Папка сборки</label>
+            </div>
+          )}
+          <div hidden={uploadMode !== 'single'}>
           <input
             ref={fileInputRef}
+            aria-label="Выберите файл"
             type="file"
             onChange={(event) =>
               setSelectedFile(event.target.files?.[0] || null)
             }
             className="border rounded p-2 w-full bg-white"
           />
+          {compressionReady && <label className="mt-2 flex items-center gap-2 text-sm text-gray-600"><input type="checkbox" checked={optimizeFile} onChange={event => setOptimizeFile(event.target.checked)} />Сжать без потери данных, если размер уменьшится</label>}
+          </div>
+          <div hidden={uploadMode !== 'folder'}>
+            <input ref={folderInputRef} type="file" multiple {...{ webkitdirectory: '', directory: '' }} aria-label="Выберите папку сборки"
+              onChange={event => setSelectedFolder(Array.from(event.target.files || []))} className="border rounded p-2 w-full bg-white" />
+            <p className="mt-2 text-sm text-gray-600">Выберите папку со всеми деталями сборки. При скачивании Вы получите ZIP с исходными файлами и вложенными папками. Пустые папки браузер не передаёт.</p>
+            {selectedFolder.length > 0 && <p className="mt-2 text-sm text-gray-600">Выбрано файлов: <b>{selectedFolder.length}</b> · {formatFileSize(selectedFolder.reduce((size, file) => size + file.size, 0))}</p>}
+          </div>
 
-          {selectedFile && (
+          {uploadMode === 'single' && selectedFile && (
             <div className="text-sm text-gray-600">
               Выбран файл: <b>{selectedFile.name}</b> ·{' '}
               {formatFileSize(selectedFile.size)}
@@ -549,16 +569,23 @@ export function ProjectFiles({
 
           <button
             onClick={handleUploadFile}
-            disabled={uploadingFile || !selectedFile}
+            disabled={uploadingFile || !!openingFileId || (uploadMode === 'folder' ? !selectedFolder.length : !selectedFile)}
             className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition disabled:opacity-60"
           >
-            {uploadingFile ? 'Загружаем...' : 'Загрузить файл'}
+            {uploadingFile ? 'Загружаем...' : uploadMode === 'folder' ? 'Загрузить сборку' : 'Загрузить файл'}
           </button>
 
           <p className="text-xs text-gray-500">
-            Максимальный размер одного файла — 500 МиБ.
+            До 500 МиБ исходных данных за одну загрузку. В сборке — до 2000 файлов.
+            {' '}Лимит хранилища может быть ниже.
           </p>
-        </div>
+        </fieldset>
+        {progress && <div className="mt-3 text-sm text-blue-800" role="status" aria-live="polite">
+          {progressLabel(progress)}
+          {progress.total > 0 && <progress className="mt-2 block w-full" value={progress.done} max={progress.total} aria-label="Обработка файлов" />}
+          {progress.stage !== 'uploading' && <button className="mt-2 underline" type="button" onClick={() => processingRef.current?.abort()}>Отменить обработку</button>}
+        </div>}
+        {uploadMessage && <p className="mt-3 text-sm text-green-700" role="status">{uploadMessage}</p>}
       </div>
 
       {filesLoading ? (
@@ -609,9 +636,12 @@ export function ProjectFiles({
                   )}
 
                   <div className="text-xs text-gray-400 mt-2">
-                    Размер: {formatFileSize(file.file_size)} ·{' '}
+                    {file.storage_format === PACK_FORMAT ? `В хранилище: ${formatFileSize(file.file_size)}` : `Размер: ${formatFileSize(file.file_size)}`} ·{' '}
                     {new Date(file.created_at).toLocaleString()}
                   </div>
+                  {file.storage_format === PACK_FORMAT && <div className="text-xs text-gray-500 mt-1">
+                    Исходные данные: {formatFileSize(file.original_size ?? null)}{file.pack_kind === 'folder' ? ` · ${file.file_count} файлов в сборке` : ''}
+                  </div>}
 
                   {file.mime_type && (
                     <div className="text-xs text-gray-400 mt-1">
@@ -623,18 +653,18 @@ export function ProjectFiles({
                 <div className="flex gap-2 flex-wrap shrink-0">
                   <button
                     onClick={() => handleOpenFile(file)}
-                    disabled={openingFileId === file.id}
+                    disabled={!!openingFileId || uploadingFile || deletingFileId === file.id}
                     className="bg-gray-200 text-gray-800 text-sm px-3 py-1 rounded hover:bg-gray-300 transition disabled:opacity-60"
                   >
                     {openingFileId === file.id
                       ? 'Открываем...'
-                      : 'Открыть'}
+                      : file.storage_format === PACK_FORMAT ? 'Скачать' : 'Открыть'}
                   </button>
 
                   {canDeleteFile && (
                     <button
                       onClick={() => handleDeleteFile(file)}
-                      disabled={deletingFileId === file.id}
+                      disabled={deletingFileId === file.id || openingFileId === file.id}
                       className="bg-red-600 text-white text-sm px-3 py-1 rounded hover:bg-red-700 transition disabled:opacity-60"
                     >
                       {deletingFileId === file.id

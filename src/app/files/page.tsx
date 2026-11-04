@@ -7,11 +7,13 @@ import { PageLoading } from '@/components/PageState'
 import { PageHeader } from '@/components/PageHeader'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { getAppErrorMessage, logAppError, showAppError } from '@/lib/appFeedback'
+import { openProjectFile, progressLabel } from '@/lib/projectStorage/client'
+import { PACK_FORMAT, type Progress, type StoredFile } from '@/lib/projectStorage/format'
 
-type ProjectFile = {
+type ProjectFile = StoredFile & {
   id: string
   project_id: string
   uploaded_by: string | null
@@ -95,6 +97,10 @@ export default function FilesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [openingFileId, setOpeningFileId] = useState<string | null>(null)
+  const [fileProgress, setFileProgress] = useState<Progress | null>(null)
+  const downloadRef = useRef<AbortController | null>(null)
+
+  useEffect(() => () => downloadRef.current?.abort(), [])
 
   const [search, setSearch] = useState('')
   const [projectFilter, setProjectFilter] = useState('all')
@@ -245,26 +251,17 @@ export default function FilesPage() {
     if (openingFileId) return
 
     setOpeningFileId(file.id)
+    const controller = new AbortController()
+    downloadRef.current = controller
 
     try {
-      const { data, error: signedUrlError } = await supabase.storage
-        .from('project-files')
-        .createSignedUrl(file.file_path, 60 * 5)
-
-      if (signedUrlError || !data?.signedUrl) {
-        showAppError(
-          signedUrlError,
-          'Не удалось создать безопасную ссылку на файл.',
-          'Ошибка открытия файла'
-        )
-        return
-      }
-
-      window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+      await openProjectFile(file, setFileProgress, controller.signal)
     } catch (error) {
-      showAppError(error, 'Не удалось открыть файл.', 'Ошибка открытия файла')
+      if (!controller.signal.aborted) showAppError(error, 'Не удалось открыть файл.', 'Ошибка открытия файла')
     } finally {
+      downloadRef.current = null
       setOpeningFileId(null)
+      setFileProgress(null)
     }
   }
 
@@ -294,6 +291,10 @@ export default function FilesPage() {
           Ошибка загрузки файлов: {error}
         </div>
       )}
+      {fileProgress && <div className="mb-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-800" role="status">
+        {progressLabel(fileProgress)}
+        <button type="button" className="ml-3 underline" onClick={() => downloadRef.current?.abort()}>Отменить</button>
+      </div>}
 
       <div className="mb-6 grid gap-4 md:grid-cols-4">
         <div className="rounded-xl border bg-white p-4 shadow-sm">
@@ -421,7 +422,8 @@ export default function FilesPage() {
                     )}
 
                     <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400">
-                      <span>Размер: {formatFileSize(file.file_size)}</span>
+                      <span>{file.storage_format === PACK_FORMAT ? 'В хранилище' : 'Размер'}: {formatFileSize(file.file_size)}</span>
+                      {file.storage_format === PACK_FORMAT && <span>Исходные данные: {formatFileSize(file.original_size ?? null)}{file.pack_kind === 'folder' ? ` · ${file.file_count} файлов` : ''}</span>}
                       <span>Дата: {formatDate(file.created_at)}</span>
                       {file.mime_type && <span>Тип: {file.mime_type}</span>}
                     </div>
@@ -430,10 +432,10 @@ export default function FilesPage() {
                   <div className="flex shrink-0 flex-wrap gap-2">
                     <button
                       onClick={() => handleOpenFile(file)}
-                      disabled={openingFileId === file.id}
+                      disabled={!!openingFileId}
                       className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white transition hover:bg-blue-700 disabled:opacity-60"
                     >
-                      {openingFileId === file.id ? 'Открываем...' : 'Открыть файл'}
+                      {openingFileId === file.id ? 'Подготавливаем...' : file.storage_format === PACK_FORMAT ? 'Скачать' : 'Открыть файл'}
                     </button>
 
                     <Link

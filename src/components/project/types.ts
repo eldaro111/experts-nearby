@@ -70,6 +70,11 @@ export interface ProjectFile {
   file_name: string
   file_path: string
   file_size: number | null
+  storage_format?: string | null
+  pack_kind?: 'single' | 'folder' | null
+  original_size?: number | null
+  file_count?: number | null
+  storage_sha256?: string | null
   mime_type: string | null
   category: string
   description: string | null

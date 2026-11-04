@@ -8,10 +8,12 @@ import { PageHeader } from '@/components/PageHeader'
 
 import Link from 'next/link'
 import { priceLabel } from '@/lib/profileOptions'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { getAppErrorMessage, logAppError, showAppError } from '@/lib/appFeedback'
+import { openProjectFile, progressLabel } from '@/lib/projectStorage/client'
+import { PACK_FORMAT, type Progress, type StoredFile } from '@/lib/projectStorage/format'
 
 type ResultType = 'project' | 'task' | 'file' | 'auction' | 'expert' | 'notification'
 type TypeFilter = 'all' | ResultType
@@ -36,7 +38,7 @@ type Task = {
   created_at: string | null
 }
 
-type ProjectFile = {
+type ProjectFile = StoredFile & {
   id: string
   project_id: string
   uploaded_by: string | null
@@ -100,7 +102,7 @@ type SearchResult = {
   href: string
   createdAt: string | null
   projectId?: string
-  filePath?: string
+  file?: StoredFile
   badge?: string
 }
 
@@ -278,13 +280,13 @@ function ResultCard({
           Открыть
         </Link>
 
-        {result.type === 'file' && result.filePath && (
+        {result.type === 'file' && result.file && (
           <button
             onClick={() => onOpenFile(result)}
-            disabled={openingFileId === result.id}
+            disabled={!!openingFileId}
             className="rounded-lg border px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {openingFileId === result.id ? 'Открываем...' : 'Открыть файл'}
+            {openingFileId === result.id ? 'Подготавливаем...' : result.file.storage_format === PACK_FORMAT ? 'Скачать' : 'Открыть файл'}
           </button>
         )}
       </div>
@@ -321,6 +323,10 @@ export default function SearchPage() {
 
   const [results, setResults] = useState<SearchResult[]>([])
   const [openingFileId, setOpeningFileId] = useState<string | null>(null)
+  const [fileProgress, setFileProgress] = useState<Progress | null>(null)
+  const downloadRef = useRef<AbortController | null>(null)
+
+  useEffect(() => () => downloadRef.current?.abort(), [])
 
   const loadSearchData = async (silent = false) => {
     if (silent) setRefreshing(true)
@@ -422,7 +428,7 @@ export default function SearchPage() {
       projectIds.length
         ? supabase
             .from('project_files')
-            .select('id,project_id,uploaded_by,file_name,file_path,file_size,mime_type,category,description,version_label,created_at')
+            .select('*')
             .in('project_id', projectIds)
             .order('created_at', { ascending: false })
             .limit(250)
@@ -474,7 +480,7 @@ export default function SearchPage() {
         href: `/projects/${file.project_id}`,
         createdAt: file.created_at,
         projectId: file.project_id,
-        filePath: file.file_path,
+        file,
         badge: `${file.category || 'other'} · ${formatFileSize(file.file_size)}`,
       }
     })
@@ -575,29 +581,20 @@ export default function SearchPage() {
   }, [results, query, typeFilter])
 
   const onOpenFile = async (result: SearchResult) => {
-    if (!result.filePath || openingFileId) return
+    if (!result.file || openingFileId) return
 
     setOpeningFileId(result.id)
+    const controller = new AbortController()
+    downloadRef.current = controller
 
     try {
-      const { data, error } = await supabase.storage
-        .from('project-files')
-        .createSignedUrl(result.filePath, 60 * 5)
-
-      if (error || !data?.signedUrl) {
-        showAppError(
-          error,
-          'Не удалось создать безопасную ссылку на файл.',
-          'Ошибка открытия файла'
-        )
-        return
-      }
-
-      window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+      await openProjectFile(result.file, setFileProgress, controller.signal)
     } catch (error) {
-      showAppError(error, 'Не удалось открыть файл.', 'Ошибка открытия файла')
+      if (!controller.signal.aborted) showAppError(error, 'Не удалось открыть файл.', 'Ошибка открытия файла')
     } finally {
+      downloadRef.current = null
       setOpeningFileId(null)
+      setFileProgress(null)
     }
   }
 
@@ -606,6 +603,10 @@ export default function SearchPage() {
   return (
     <div className="page-shell">
       <PageHeader eyebrow="По всей платформе" title="Найдите нужное" description="Проекты, специалисты, задачи и материалы — одним запросом."><button onClick={() => loadSearchData(true)} disabled={refreshing} className="action-secondary disabled:opacity-60"><UiText text={refreshing ? 'Обновляем…' : 'Обновить'}/></button></PageHeader>
+      {fileProgress && <div className="mb-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-800" role="status">
+        {progressLabel(fileProgress)}
+        <button type="button" className="ml-3 underline" onClick={() => downloadRef.current?.abort()}>Отменить</button>
+      </div>}
 
       {errorText && (
         <div className="mb-6 whitespace-pre-line rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800">
