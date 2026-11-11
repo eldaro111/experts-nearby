@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { logAppError, showAppError, showAppMessage } from '@/lib/appFeedback'
+import { marketStatusLabel, marketTypeLabel as typeLabel, proposalStatusLabel } from '@/lib/marketLabels'
 import { AuctionCard } from '@/components/auction/AuctionCard'
 import type { Auction, AuctionBid } from '@/components/auction/types'
 
@@ -17,28 +18,6 @@ type Tab = 'owned' | 'bids'
 type BidWithAuction = AuctionBid & {
   auction?: Auction | null
   auctions?: Auction | null
-}
-
-const statusLabel = (status: string) => {
-  const map: Record<string, string> = {
-    draft: 'Черновик',
-    open: 'Открыт',
-    closed: 'Закрыт',
-    cancelled: 'Отменён',
-    new: 'Новое',
-    shortlisted: 'В шорт-листе',
-    accepted: 'Принято',
-    rejected: 'Отклонено',
-    withdrawn: 'Отозвано',
-  }
-
-  return map[status] || status
-}
-
-const typeLabel = (type: string | null | undefined) => {
-  if (type === 'request') return 'Заказ на разработку'
-  if (type === 'offer') return 'Проект для внедрения'
-  return 'Объявление'
 }
 
 const formatDate = (value: string | null) => {
@@ -183,7 +162,7 @@ export default function MyAuctionsPage() {
     if (updatingAuctionId) return
 
     const ok = window.confirm(
-      'Отменить объявление? Оно будет скрыто от остальных пользователей, но владелец сохранит историю.'
+      'Отменить объявление? Оно будет скрыто от остальных пользователей, а у вас сохранится история.'
     )
 
     if (!ok) return
@@ -274,9 +253,9 @@ export default function MyAuctionsPage() {
     <div className="page-shell">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold"><UiText text={"Мои объявления"}/></h1>
+          <h1 className="text-3xl font-bold"><UiText text={"Мои объявления и предложения"}/></h1>
           <p className="text-gray-600 mt-2">
-            Управление созданными объявлениями и предложениями, которые вы подавали на чужие проекты.
+            Ваши объявления на рынке проектов и предложения, которые вы отправили по чужим объявлениям.
           </p>
         </div>
 
@@ -304,7 +283,7 @@ export default function MyAuctionsPage() {
         </div>
 
         <div className="border rounded-xl bg-white p-4 shadow-sm">
-          <div className="text-sm text-gray-500">Активные мои</div>
+          <div className="text-sm text-gray-500">Мои открытые</div>
           <div className="text-2xl font-bold mt-1">{counts.activeOwned}</div>
         </div>
 
@@ -314,7 +293,7 @@ export default function MyAuctionsPage() {
         </div>
 
         <div className="border rounded-xl bg-white p-4 shadow-sm">
-          <div className="text-sm text-gray-500">Принятые предложения</div>
+          <div className="text-sm text-gray-500">Выбранные предложения</div>
           <div className="text-2xl font-bold mt-1">{counts.acceptedBids}</div>
         </div>
       </div>
@@ -358,7 +337,7 @@ export default function MyAuctionsPage() {
                   <div className="border rounded-xl bg-white p-4 shadow-sm">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="text-sm text-gray-600">
-                        <b>Статус:</b> {statusLabel(auction.status)}
+                        <b>Статус:</b> {marketStatusLabel(auction.status)}
                       </div>
 
                       <div className="flex flex-wrap gap-2">
@@ -419,7 +398,7 @@ export default function MyAuctionsPage() {
         <section>
           {myBids.length === 0 ? (
             <div className="text-center text-gray-500 border rounded-xl bg-white p-8">
-              Вы ещё не подавали предложений на объявления.
+              Вы ещё не отправляли предложений по объявлениям.
             </div>
           ) : (
             <div className="grid gap-4">
@@ -433,7 +412,7 @@ export default function MyAuctionsPage() {
                       <div className="min-w-0">
                         <div className="flex flex-wrap gap-2 mb-3">
                           <span className="text-xs px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
-                            {statusLabel(bid.status)}
+                            {proposalStatusLabel(bid.status)}
                           </span>
 
                           {auction && (

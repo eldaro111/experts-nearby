@@ -229,7 +229,15 @@ try {
         await page.locator('h1').first().waitFor()
         const text = await page.locator('body').innerText()
         assert.ok(!/аукцион/i.test(text), `${route} still mentions «аукцион»`)
+        assert.ok(!/победител|ставк[аиуое]/i.test(text), `${route} still uses bidding vocabulary`)
+        assert.equal(await page.locator('svg.lucide-gavel').count(), 0, `${route} still shows a gavel icon`)
       }
+    })
+
+    await check('market: neutral type names and FAQ entry', async () => {
+      await page.goto(base + '/help/faq')
+      await page.getByText('Что такое «Рынок проектов»?').first().waitFor()
+      assert.ok(await page.getByText('Как автор объявления выбирает предложение?').first().isVisible())
     })
 
     await check('English labels for the new navigation', async () => {
@@ -261,17 +269,36 @@ try {
     await account.waitFor()
     await check('1440 signed-in: notifications, work bar and «Мои проекты»', async () => {
       await page.getByRole('button', { name: 'Уведомления' }).waitFor()
-      assert.ok(await page.getByRole('navigation', { name: 'Рабочие разделы' }).getByRole('link', { name: 'Мои объявления' }).isVisible())
+      assert.ok(await page.getByRole('navigation', { name: 'Рабочие разделы' }).getByRole('link', { name: 'Объявления и предложения' }).isVisible())
       const projects = page.getByRole('navigation', { name: 'Основная навигация' }).getByRole('button', { name: 'Проекты', exact: true })
       await projects.click()
-      assert.deepEqual(await hrefs(page.locator('#projects-navigation')), ['/listings', '/listings/new', '/auctions', '/dashboard'])
+      assert.deepEqual(await hrefs(page.locator('#projects-navigation')), ['/listings', '/listings/new', '/auctions', '/dashboard#my-projects'])
       await page.screenshot({ path: `${out}/desktop-1440-signed-projects-open.png` })
       await page.keyboard.press('Escape')
       assert.ok(await noOverflow(page))
       assert.ok(await mainBelowHeader(page))
     })
+    await check('signed-in: new listing form uses neutral type names', async () => {
+      await page.goto(base + '/auctions/new')
+      await page.getByRole('heading', { level: 1 }).first().waitFor()
+      assert.ok(await page.getByText('Готовый проект', { exact: true }).first().isVisible())
+      assert.ok(await page.getByText('Заказ на разработку', { exact: true }).first().isVisible())
+      assert.ok(await page.getByRole('button', { name: 'Разместить объявление' }).isVisible())
+      await page.screenshot({ path: `${out}/market-new-listing-1440.png`, fullPage: true })
+    })
+    await check('signed-in: «Мои проекты» opens the dashboard section', async () => {
+      await page.goto(base + '/')
+      await page.getByRole('navigation', { name: 'Основная навигация' }).getByRole('button', { name: 'Проекты', exact: true }).click()
+      await page.locator('#projects-navigation').getByRole('link', { name: 'Мои проекты' }).click()
+      await page.waitForURL(`${base}/dashboard#my-projects`)
+      await page.locator('#my-projects').waitFor()
+      await page.waitForFunction(() => {
+        const box = document.getElementById('my-projects')?.getBoundingClientRect()
+        return box && box.top >= 0 && box.top < innerHeight
+      })
+    })
     await check('signed-in: no «аукцион» on dashboard and own listings', async () => {
-      for (const route of ['/dashboard', '/auctions/my', '/']) {
+      for (const route of ['/dashboard', '/auctions/my', '/auctions/new', '/']) {
         await page.goto(base + route)
         await page.locator('h1').first().waitFor({ timeout: 10000 }).catch(async (error) => {
           await page.screenshot({ path: `${out}/debug-${route.replaceAll('/', '_')}.png`, fullPage: true })
@@ -368,7 +395,7 @@ try {
       assert.ok(await noOverflow(page))
       await page.getByRole('button', { name: 'Открыть навигацию' }).tap()
       await page.locator('#mobile-navigation').getByRole('button', { name: 'Проекты', exact: true }).tap()
-      assert.deepEqual(await hrefs(page.locator('#mobile-projects-navigation')), ['/listings', '/listings/new', '/auctions', '/dashboard'])
+      assert.deepEqual(await hrefs(page.locator('#mobile-projects-navigation')), ['/listings', '/listings/new', '/auctions', '/dashboard#my-projects'])
       assert.ok(await noOverflow(page))
       await page.screenshot({ path: `${out}/mobile-360-signed-projects-open.png` })
     })

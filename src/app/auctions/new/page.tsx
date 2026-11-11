@@ -236,7 +236,7 @@ export default function NewAuctionPage() {
               aria-pressed={type === 'offer'}
               className={`border rounded-lg p-4 text-left transition ${type === 'offer' ? 'border-blue-600 bg-blue-50' : 'bg-white hover:bg-gray-50'}`}
             >
-              <div className="font-semibold">Проект для внедрения</div>
+              <div className="font-semibold">Готовый проект</div>
               <div className="text-sm text-gray-600 mt-1">
                 Есть разработка/прототип, ищем производство, покупателя или партнёра.
               </div>
@@ -353,7 +353,7 @@ export default function NewAuctionPage() {
           </div>
         ) : (
           <div className="border rounded-xl bg-white p-5 shadow-sm space-y-4">
-            <h2 className="text-xl font-semibold">Проект для внедрения</h2>
+            <h2 className="text-xl font-semibold">Готовый проект</h2>
 
             <div className="grid md:grid-cols-2 gap-3">
               <FormField label="Тип сделки"><input
@@ -402,7 +402,7 @@ export default function NewAuctionPage() {
               </select>
 
               <p className="text-xs text-gray-500 mt-1">
-                Для готового проекта можно привязать уже созданный листинг/проект.
+                К готовому проекту можно привязать уже созданный проект на платформе.
               </p>
             </div>
 
@@ -425,7 +425,7 @@ export default function NewAuctionPage() {
             <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
               <h3 className="font-semibold">Закрытая часть объявления о готовом проекте</h3>
               <p className="text-sm text-gray-600">
-                Эти данные будут лежать отдельно в auction_protected и не должны попадать в публичный fetch.
+                Закрытые материалы хранятся отдельно от публичной части. Их увидите вы и пользователи, которым вы одобрите запрос доступа.
               </p>
 
               <FormField label="Закрытое описание"><textarea

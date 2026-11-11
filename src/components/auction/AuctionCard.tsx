@@ -2,26 +2,10 @@
 
 import Link from 'next/link'
 import type { Auction } from './types'
+import { marketStatusLabel as statusLabel, marketTypeLabel as typeLabel } from '@/lib/marketLabels'
 
 interface AuctionCardProps {
   auction: Auction
-}
-
-const typeLabel = (type: string) => {
-  if (type === 'request') return 'Заказ на разработку'
-  if (type === 'offer') return 'Проект для внедрения'
-  return type
-}
-
-const statusLabel = (status: string) => {
-  const map: Record<string, string> = {
-    draft: 'Черновик',
-    open: 'Открыт',
-    closed: 'Закрыт',
-    cancelled: 'Отменён',
-  }
-
-  return map[status] || status
 }
 
 const formatMoney = (min: number | null, max: number | null, currency: string) => {

@@ -5,7 +5,7 @@ import { UiText } from '@/components/LocaleProvider'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useRef, useState, type FocusEvent as ReactFocusEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { User } from '@supabase/supabase-js'
-import { ArrowUpRight, ChevronDown, Menu, Search, X, LayoutDashboard, CheckSquare, CalendarDays, FolderOpen, Bell, Sparkles, Settings, UserRound, LogOut, Gavel } from 'lucide-react'
+import { ArrowUpRight, ChevronDown, Menu, Search, X, LayoutDashboard, CheckSquare, CalendarDays, FolderOpen, Bell, Sparkles, Settings, UserRound, LogOut, Handshake } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { showAppError } from '@/lib/appFeedback'
 import { NotificationBell } from '@/components/NotificationBell'
@@ -27,7 +27,7 @@ const projectsGroup: NavGroup = {
     { href: '/listings', label: 'Каталог проектов' },
     { href: '/listings/new', label: 'Создать проект' },
     { href: '/auctions', label: 'Рынок проектов' },
-    { href: '/dashboard', label: 'Мои проекты', signedInOnly: true },
+    { href: '/dashboard#my-projects', label: 'Мои проекты', signedInOnly: true },
   ],
 }
 const partnersGroup: NavGroup = {
@@ -51,7 +51,7 @@ const workLinks = [
   { href: '/tasks', label: 'Мои задачи', icon: CheckSquare },
   { href: '/calendar', label: 'Календарь', icon: CalendarDays },
   { href: '/files', label: 'Файлы', icon: FolderOpen },
-  { href: '/auctions/my', label: 'Мои объявления', icon: Gavel },
+  { href: '/auctions/my', label: 'Объявления и предложения', icon: Handshake },
 ]
 const accountLinks = [
   { href: '/profile', label: 'Мой профиль', icon: UserRound },

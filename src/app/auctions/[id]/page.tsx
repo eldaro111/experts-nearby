@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { logAppError, showAppError, showAppMessage } from '@/lib/appFeedback'
+import { marketTypeLabel, proposalStatusLabel as statusLabel } from '@/lib/marketLabels'
 import type {
   Auction,
   AuctionAccessRequest,
@@ -37,20 +38,6 @@ const toIsoOrNull = (value: string) => {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return null
   return date.toISOString()
-}
-
-const statusLabel = (status: string) => {
-  const map: Record<string, string> = {
-    new: 'Новое',
-    shortlisted: 'В шортлисте',
-    accepted: 'Принято',
-    rejected: 'Отклонено',
-    withdrawn: 'Отозвано',
-    pending: 'На рассмотрении',
-    approved: 'Одобрено',
-  }
-
-  return map[status] || status
 }
 
 
@@ -262,7 +249,7 @@ export default function AuctionDetailsPage() {
       const result = firstRpcRow<SaveAuctionBidResult>(data)
 
       if (!result?.bid_id) {
-        logAppError('RPC ставки не вернул результат', data)
+        logAppError('RPC сохранения предложения не вернул результат', data)
         showAppMessage('Сервер не вернул результат сохранения предложения.', 'error')
         return
       }
@@ -380,7 +367,7 @@ export default function AuctionDetailsPage() {
     }
 
     const ok = window.confirm(
-      'Закрыть объявление без выбора победителя? Все активные предложения будут отклонены.'
+      'Закрыть объявление, не выбрав предложение? Все активные предложения будут отклонены.'
     )
 
     if (!ok) return
@@ -410,7 +397,7 @@ export default function AuctionDetailsPage() {
 
     if (auction.status !== 'draft') {
       showAppMessage(
-        'Физически удалить можно только черновик без предложений. Для открытого объявления используй отмену.',
+        'Физически удалить можно только черновик без предложений. Открытое объявление можно отменить.',
         'warning'
       )
       return
@@ -461,7 +448,7 @@ export default function AuctionDetailsPage() {
     try {
       if (status === 'accepted') {
         if (auction.status !== 'open') {
-          showAppMessage('Принять предложение можно только у открытого объявления.', 'warning')
+          showAppMessage('Выбрать предложение можно только в открытом объявлении.', 'warning')
           return
         }
 
@@ -474,15 +461,15 @@ export default function AuctionDetailsPage() {
         )
 
         if (error) {
-          showAppError(error, 'Не удалось принять предложение.', 'Принятие предложения по объявлению')
+          showAppError(error, 'Не удалось выбрать предложение.', 'Выбор предложения')
           return
         }
 
         const result = firstRpcRow<AcceptAuctionBidResult>(data)
 
         if (!result?.accepted_bid_id) {
-          logAppError('RPC принятия ставки не вернул результат', data)
-          showAppMessage('Сервер не вернул результат принятия предложения.', 'error')
+          logAppError('RPC выбора предложения не вернул результат', data)
+          showAppMessage('Сервер не вернул результат выбора предложения.', 'error')
           return
         }
 
@@ -491,13 +478,13 @@ export default function AuctionDetailsPage() {
         showAppMessage(
           auction.type === 'request' && result.project_id
             ? result.project_was_created
-              ? 'Предложение принято. Проект создан, победитель добавлен в рабочую зону.'
+              ? 'Предложение выбрано. Проект создан, автор предложения добавлен в рабочую зону.'
               : result.already_completed
-                ? 'Предложение уже было принято ранее.'
-                : 'Предложение принято. Победитель добавлен в связанный проект.'
+                ? 'Это предложение уже было выбрано ранее.'
+                : 'Предложение выбрано. Автор предложения добавлен в связанный проект.'
             : result.already_completed
-              ? 'Предложение уже было принято ранее.'
-              : 'Предложение принято. Объявление закрыто.',
+              ? 'Это предложение уже было выбрано ранее.'
+              : 'Предложение выбрано. Объявление закрыто.',
           result.already_completed ? 'info' : 'success'
         )
 
@@ -623,7 +610,7 @@ export default function AuctionDetailsPage() {
       <div className="border rounded-xl bg-white p-6 shadow-sm mb-8">
         <div className="flex flex-wrap gap-2 mb-3">
           <span className={`text-xs px-2 py-1 rounded-full border ${auction.type === 'offer' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
-            {auction.type === 'offer' ? 'Проект для внедрения' : 'Заказ на разработку'}
+            {marketTypeLabel(auction.type)}
           </span>
           <span className="text-xs px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
             {auction.status}
@@ -1002,7 +989,7 @@ export default function AuctionDetailsPage() {
                           disabled={updatingId === bid.id}
                           className="bg-gray-200 text-gray-800 text-sm px-3 py-1 rounded hover:bg-gray-300 disabled:opacity-60"
                         >
-                          В шортлист
+                          В шорт-лист
                         </button>
 
                         <button
@@ -1010,7 +997,7 @@ export default function AuctionDetailsPage() {
                           disabled={updatingId === bid.id}
                           className="bg-green-600 text-white text-sm px-3 py-1 rounded hover:bg-green-700 disabled:opacity-60"
                         >
-                          Принять
+                          Выбрать предложение
                         </button>
 
                         <button

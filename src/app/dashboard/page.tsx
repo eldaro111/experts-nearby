@@ -5,6 +5,7 @@ import { UiText } from '@/components/LocaleProvider'
 import { PageLoading } from '@/components/PageState'
 
 import { PageHeader } from '@/components/PageHeader'
+import { marketStatusLabel, marketTypeLabel, proposalStatusLabel } from '@/lib/marketLabels'
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
@@ -142,11 +143,7 @@ function taskStatusLabel(status: string) {
   return status
 }
 
-function auctionTypeLabel(type: string) {
-  if (type === 'request') return 'Заказ'
-  if (type === 'offer') return 'Проект для внедрения'
-  return type
-}
+const auctionTypeLabel = marketTypeLabel
 
 function statusBadgeClass(status: string) {
   if (status === 'open' || status === 'new' || status === 'doing') {
@@ -173,16 +170,18 @@ function CompactStatus({ children, status }: { children: React.ReactNode; status
 }
 
 function Card({
+  id,
   title,
   action,
   children,
 }: {
+  id?: string
   title: string
   action?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
-    <section className="rounded-2xl border bg-white p-6 shadow-sm">
+    <section id={id} className="scroll-mt-40 rounded-2xl border bg-white p-6 shadow-sm">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b pb-4">
         <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
         {action}
@@ -200,22 +199,8 @@ function EmptyState({ children }: { children: React.ReactNode }) {
   )
 }
 
-function auctionStatusLabel(status: string) {
-  if (status === 'draft') return 'Черновик'
-  if (status === 'open') return 'Открыт'
-  if (status === 'closed') return 'Закрыт'
-  if (status === 'cancelled') return 'Отменён'
-  return status
-}
-
-function bidStatusLabel(status: string) {
-  if (status === 'new') return 'Новое'
-  if (status === 'shortlisted') return 'В шорт-листе'
-  if (status === 'accepted') return 'Принято'
-  if (status === 'rejected') return 'Отклонено'
-  if (status === 'withdrawn') return 'Отозвано'
-  return status
-}
+const auctionStatusLabel = marketStatusLabel
+const bidStatusLabel = proposalStatusLabel
 
 function isPast(value?: string | null) {
   if (!value) return false
@@ -429,6 +414,12 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // «Мои проекты» in the header links to /dashboard#my-projects; the card exists only after data loads.
+  useEffect(() => {
+    if (loading || window.location.hash !== '#my-projects') return
+    document.getElementById('my-projects')?.scrollIntoView({ block: 'start' })
+  }, [loading])
+
   const unreadNotifications = dashboard.notifications.filter((item) => !item.read_at)
   const now = Date.now()
   const weekFromNow = now + 7 * 24 * 60 * 60 * 1000
@@ -547,6 +538,7 @@ export default function DashboardPage() {
           </Card>
 
           <Card
+            id="my-projects"
             title="Мои проекты"
             action={<div className="flex gap-3"><Link href="/listings" className="text-sm font-semibold text-blue-700 hover:underline">Все проекты</Link><Link href="/listings/new" className="text-sm font-semibold text-blue-700 hover:underline">Создать</Link></div>}
           >

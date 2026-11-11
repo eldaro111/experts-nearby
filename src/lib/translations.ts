@@ -134,7 +134,6 @@ export const english: Record<string, string> = {
   'Эксперты под конкретный результат': 'Expertise for a specific result',
   'Для заказчиков и команд': 'For clients and teams',
   'Открыть рынок проектов': 'Open the project market',
-  'Заказы и решения для внедрения': 'Engineering requests and solutions',
   'Как это работает': 'How it works',
   'Чёткий путь к результату': 'A clear path to results',
   'Поиск команды и совместная работа': 'Finding a team and working together',
@@ -346,4 +345,6 @@ export const english: Record<string, string> = {
   Стартапам: 'Startups',
   Помощь: 'Help',
   'Заказы на разработку и готовые проекты': 'Development requests and ready-made projects',
+  'Мои объявления и предложения': 'My listings and proposals',
+  'Объявления и предложения': 'Listings and proposals',
 }

@@ -11,6 +11,7 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { logAppError, showAppError, showAppMessage } from '@/lib/appFeedback'
+import { marketStatusLabel, marketTypeLabel } from '@/lib/marketLabels'
 import type { Auction, AuctionProtected } from '@/components/auction/types'
 
 const splitList = (value: string) =>
@@ -56,10 +57,6 @@ const stringifyProtectedLinks = (links: any[] | null | undefined) => {
     })
     .filter(Boolean)
     .join('\n')
-}
-
-const auctionTypeLabel = (type: Auction['type']) => {
-  return type === 'offer' ? 'Проект для внедрения' : 'Заказ на разработку'
 }
 
 interface MyListingOption {
@@ -361,20 +358,20 @@ export default function EditAuctionPage() {
           </Link>
           <h1 className="text-3xl font-bold mt-2">Редактировать объявление</h1>
           <p className="text-gray-600 mt-1">
-            Тип: <b>{auctionTypeLabel(auction.type)}</b>. Тип объявления после создания не меняем,
-            чтобы не ломать предложения и доступы.
+            Тип: <b>{marketTypeLabel(auction.type)}</b>. Тип объявления после создания изменить нельзя:
+            от него зависят уже отправленные предложения и доступы.
           </p>
         </div>
 
         <span className="text-sm px-3 py-1 rounded-full bg-gray-50 border text-gray-700">
-          Статус: {auction.status}
+          Статус: {marketStatusLabel(auction.status)}
         </span>
       </div>
 
       {!canEdit && (
         <div className="border rounded-xl bg-orange-50 text-orange-800 p-5 mb-6">
-          Это объявление уже нельзя редактировать. Редактирование разрешено только для статусов
-          <b> open</b> и <b>draft</b>.
+          Это объявление уже нельзя редактировать. Редактировать можно только открытое объявление
+          или черновик.
         </div>
       )}
 
@@ -500,7 +497,7 @@ export default function EditAuctionPage() {
           </div>
         ) : (
           <div className="border rounded-xl bg-white p-5 shadow-sm space-y-4">
-            <h2 className="text-xl font-semibold">Проект для внедрения</h2>
+            <h2 className="text-xl font-semibold">Готовый проект</h2>
 
             <div className="grid md:grid-cols-2 gap-3">
               <FormField label="Тип сделки"><input
@@ -575,7 +572,7 @@ export default function EditAuctionPage() {
             <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
               <h3 className="font-semibold">Закрытая часть объявления о готовом проекте</h3>
               <p className="text-sm text-gray-600">
-                Эти данные обновляются отдельно в auction_protected и не попадают в публичную часть.
+                Закрытые материалы хранятся отдельно от публичной части. Их увидите вы и пользователи, которым вы одобрите запрос доступа.
               </p>
 
               <FormField label="Закрытое описание"><textarea

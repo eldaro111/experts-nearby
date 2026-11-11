@@ -1,5 +1,7 @@
 'use client'
 
+import { MARKET_TYPE_LABELS, marketStatusLabel } from '@/lib/marketLabels'
+
 import { UiText } from '@/components/LocaleProvider'
 
 import { PageLoading } from '@/components/PageState'
@@ -130,10 +132,7 @@ const taskStatusLabel: Record<string, string> = {
   done: 'Готово',
 }
 
-const auctionTypeLabel: Record<string, string> = {
-  request: 'Заказ',
-  offer: 'Проект для внедрения',
-}
+const auctionTypeLabel = MARKET_TYPE_LABELS
 
 const workFormatLabel: Record<string, string> = {
   remote: 'Удалённо',
@@ -489,7 +488,7 @@ export default function SearchPage() {
       id: `auction-${auction.id}`,
       type: 'auction',
       title: auction.title || 'Объявление без названия',
-      subtitle: `${auctionTypeLabel[auction.type] || auction.type} · ${auction.status}`,
+      subtitle: `${auctionTypeLabel[auction.type] || auction.type} · ${marketStatusLabel(auction.status)}`,
       description: auction.public_summary || auction.public_description || 'Описание объявления не указано.',
       href: `/auctions/${auction.id}`,
       createdAt: auction.created_at,
