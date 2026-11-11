@@ -97,7 +97,7 @@ function typeLabel(type: string) {
     contribution_approved: 'Вклад подтверждён',
     profile_review_created: 'Отзыв',
 
-    // Аукционы
+    // Объявления
     auction_new_bid: 'Новое предложение',
     auction_bid_accepted: 'Предложение принято',
     auction_bid_rejected: 'Предложение отклонено',

@@ -231,6 +231,23 @@
 .mobile-menu-toggle, .mobile-navigation { display: none; }
 .skip-link { position: fixed; z-index: 100; left: 1rem; top: -8rem; background: #245ce3; color: white; padding: 0.75rem 1rem; border-radius: 0.6rem; }
 .skip-link:focus { top: 0.75rem; }
+/* ER-001: header dropdown groups (disclosure pattern) and mobile submenus. */
+.nav-group { position: relative; }
+.nav-trigger { display: inline-flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
+.nav-trigger > svg { transition: transform 0.15s ease; }
+.nav-trigger[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.nav-trigger[aria-expanded="true"] { background: #eef4ff; color: #245ce3; }
+.nav-dropdown { position: absolute; left: 0; top: calc(100% + 0.5rem); z-index: 45; display: grid; min-width: 230px; background: #fff; border: 1px solid #dfe7f2; border-radius: 0.875rem; padding: 0.5rem; box-shadow: 0 16px 48px #142e5725; }
+.nav-dropdown a { display: block; padding: 0.7rem 0.75rem; border-radius: 0.5rem; font-size: 0.875rem; color: #394a64; white-space: nowrap; }
+.nav-dropdown a:hover, .nav-dropdown a.is-active { background: #eef4ff; color: #245ce3; }
+.nav-link:focus-visible, .nav-dropdown a:focus-visible, .mobile-group-trigger:focus-visible { outline: 2px solid #245ce3; outline-offset: 2px; }
+.mobile-group { display: grid; }
+.mobile-group-trigger { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; width: 100%; min-height: 44px; padding: 0.85rem 0.75rem; font-size: 0.9375rem; text-align: left; border-radius: 0.6rem; color: inherit; }
+.mobile-group-trigger:hover, .mobile-group-trigger.is-active { background: #eef4ff; color: #245ce3; }
+.mobile-group-trigger > svg { transition: transform 0.15s ease; flex-shrink: 0; }
+.mobile-group-trigger[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.mobile-submenu { display: grid; padding-left: 1rem; border-left: 2px solid #e5ecf7; margin: 0.15rem 0 0.35rem 0.75rem; }
+.mobile-navigation a.mobile-subitem { font-size: 0.875rem; }
 
 /* The home page uses large type, clear entry points and a blue working surface. */
 .home { max-width: 1280px; padding: 0 2rem; margin: auto; }

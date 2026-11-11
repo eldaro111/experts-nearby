@@ -72,7 +72,7 @@ const notificationMeta: Array<{ key: NotificationKey; title: string; description
   { key: 'projects', title: 'Проекты', description: 'Отклики, участники, изменения в проектах.' },
   { key: 'tasks', title: 'Задачи', description: 'Новые задачи, дедлайны, завершение и причины просрочки.' },
   { key: 'files', title: 'Файлы', description: 'Загрузка и изменение проектных материалов.' },
-  { key: 'auctions', title: 'Аукционы', description: 'Ставки, принятие предложений и запросы доступа.' },
+  { key: 'auctions', title: 'Рынок проектов', description: 'Предложения, их принятие и запросы доступа.' },
   { key: 'reviews', title: 'Отзывы', description: 'Новые отзывы и оценки в проектах.' },
   { key: 'invitations', title: 'Приглашения', description: 'Приглашения в проекты и связанные события.' },
 ]

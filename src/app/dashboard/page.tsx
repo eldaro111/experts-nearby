@@ -338,7 +338,7 @@ export default function DashboardPage() {
     if (ownerProjectsRes.error) addLoadError('Мои проекты', ownerProjectsRes.error)
     if (applicationsRes.error) addLoadError('Участие в проектах', applicationsRes.error)
     if (tasksRes.error) addLoadError('Задачи', tasksRes.error)
-    if (auctionsRes.error) addLoadError('Аукционы', auctionsRes.error)
+    if (auctionsRes.error) addLoadError('Объявления', auctionsRes.error)
     if (bidsRes.error) addLoadError('Предложения', bidsRes.error)
     if (notificationsRes.error) addLoadError('Уведомления', notificationsRes.error)
 
@@ -390,7 +390,7 @@ export default function DashboardPage() {
           .in('id', bidAuctionIds)
       : { data: [], error: null }
 
-    if (bidAuctionsRes.error) addLoadError('Аукционы по предложениям', bidAuctionsRes.error)
+    if (bidAuctionsRes.error) addLoadError('Объявления по предложениям', bidAuctionsRes.error)
 
     const bidAuctions = Object.fromEntries(
       ((bidAuctionsRes.data || []) as Auction[]).map((auction) => [auction.id, auction])
@@ -474,7 +474,7 @@ export default function DashboardPage() {
         subtitle: auctionTypeLabel(auction.type),
         date: auction.ends_at,
         href: `/auctions/${auction.id}`,
-        type: 'Аукцион',
+        type: 'Объявление',
       }))
 
     return [...fromTasks, ...fromProjects, ...fromAuctions]
@@ -486,7 +486,7 @@ export default function DashboardPage() {
 
   return (
     <div className="page-shell">
-      <PageHeader eyebrow="Личный центр" title="Рабочий центр" description="Проекты, задачи и ближайшие сроки. Всё, что требует вашего внимания."><Link href="/listings/new" className="action-primary"><UiText text={"Создать проект"}/></Link><Link href="/auctions/new" className="action-secondary">Создать аукцион</Link><button onClick={() => loadDashboard(true)} disabled={refreshing} className="action-secondary disabled:opacity-60"><UiText text={refreshing ? 'Обновляем…' : 'Обновить'}/></button></PageHeader>
+      <PageHeader eyebrow="Личный центр" title="Рабочий центр" description="Проекты, задачи и ближайшие сроки. Всё, что требует вашего внимания."><Link href="/listings/new" className="action-primary"><UiText text={"Создать проект"}/></Link><Link href="/auctions/new" className="action-secondary">Разместить объявление</Link><button onClick={() => loadDashboard(true)} disabled={refreshing} className="action-secondary disabled:opacity-60"><UiText text={refreshing ? 'Обновляем…' : 'Обновить'}/></button></PageHeader>
 
       {errors.length > 0 && (
         <div className="mt-6 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-900">
@@ -501,7 +501,7 @@ export default function DashboardPage() {
         <MetricLink href="/tasks" value={overdueTasks.length} label="просроченных задач" tone={overdueTasks.length ? 'red' : 'slate'} />
         <MetricLink href="/calendar" value={dueSoonTasks.length} label="задач на ближайшие 7 дней" tone={dueSoonTasks.length ? 'orange' : 'slate'} />
         <MetricLink href="/notifications" value={unreadNotifications.length} label="новых уведомлений" tone={unreadNotifications.length ? 'blue' : 'slate'} />
-        <MetricLink href="/auctions/my" value={openAuctions.length} label="открытых аукционов" tone={openAuctions.length ? 'blue' : 'slate'} />
+        <MetricLink href="/auctions/my" value={openAuctions.length} label="открытых объявлений" tone={openAuctions.length ? 'blue' : 'slate'} />
       </section>
 
       <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -632,9 +632,9 @@ export default function DashboardPage() {
             )}
           </Card>
 
-          <Card title="Мои аукционы" action={<Link href="/auctions/my" className="text-sm font-semibold text-blue-700 hover:underline">Все мои</Link>}>
+          <Card title="Мои объявления" action={<Link href="/auctions/my" className="text-sm font-semibold text-blue-700 hover:underline">Все мои</Link>}>
             {dashboard.auctions.length === 0 ? (
-              <EmptyState>Вы пока не создавали аукционов.</EmptyState>
+              <EmptyState>Вы пока не создавали объявлений.</EmptyState>
             ) : (
               <div className="space-y-2">
                 {dashboard.auctions.slice(0, 4).map((auction) => (
@@ -659,7 +659,7 @@ export default function DashboardPage() {
                   const auction = dashboard.bidAuctions[bid.auction_id]
                   return (
                     <Link key={bid.id} href={`/auctions/${bid.auction_id}`} className="block rounded-xl border p-3 transition hover:border-blue-300 hover:bg-blue-50/40">
-                      <div className="font-medium text-slate-950">{auction?.title || 'Аукцион'}</div>
+                      <div className="font-medium text-slate-950">{auction?.title || 'Объявление'}</div>
                       <div className="mt-1 text-sm text-slate-500">{formatMoney(bid.amount, bid.currency)}</div>
                       <div className="mt-2"><CompactStatus status={bid.status}>{bidStatusLabel(bid.status)}</CompactStatus></div>
                     </Link>

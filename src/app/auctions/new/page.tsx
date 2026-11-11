@@ -124,7 +124,7 @@ export default function NewAuctionPage() {
 
     const cleanTitle = title.trim()
     if (!cleanTitle) {
-      showAppMessage('Введите название аукциона.', 'warning')
+      showAppMessage('Введите название объявления.', 'warning')
       return
     }
 
@@ -167,8 +167,8 @@ export default function NewAuctionPage() {
       if (auctionError || !auctionData) {
         showAppError(
           auctionError,
-          'Не удалось создать аукцион.',
-          'Создание аукциона'
+          'Не удалось создать объявление.',
+          'Создание объявления'
         )
         return
       }
@@ -187,7 +187,7 @@ export default function NewAuctionPage() {
         if (protectedError) {
           logAppError('Ошибка сохранения закрытых материалов', protectedError)
           showAppMessage(
-            'Аукцион создан, но закрытые материалы не сохранились. Откройте редактирование аукциона и повторите сохранение.',
+            'Объявление создано, но закрытые материалы не сохранились. Откройте редактирование объявления и повторите сохранение.',
             'warning',
             8000
           )
@@ -196,10 +196,10 @@ export default function NewAuctionPage() {
         }
       }
 
-      showAppMessage('Аукцион создан.', 'success')
+      showAppMessage('Объявление создано.', 'success')
       router.replace(`/auctions/${auctionData.id}`)
     } catch (error) {
-      showAppError(error, 'Не удалось создать аукцион.', 'Создание аукциона')
+      showAppError(error, 'Не удалось создать объявление.', 'Создание объявления')
     } finally {
       setSaving(false)
     }
@@ -211,11 +211,11 @@ export default function NewAuctionPage() {
 
   return (
     <div className="page-shell form-shell">
-      <PageHeader eyebrow="Новый аукцион" title="Предложите задачу или решение" description="Разместите заказ на разработку или готовый проект для внедрения." />
+      <PageHeader eyebrow="Новое объявление" title="Предложите задачу или решение" description="Разместите заказ на разработку или готовый проект для внедрения." />
 
       <form onSubmit={handleCreateAuction} className="space-y-6">
         <div className="border rounded-xl bg-white p-5 shadow-sm">
-          <h2 className="text-xl font-semibold mb-4">Тип аукциона</h2>
+          <h2 className="text-xl font-semibold mb-4">Тип объявления</h2>
 
           <div className="grid md:grid-cols-2 gap-3">
             <button
@@ -247,7 +247,7 @@ export default function NewAuctionPage() {
         <div className="border rounded-xl bg-white p-5 shadow-sm space-y-4">
           <h2 className="text-xl font-semibold">Публичная часть</h2>
 
-          <FormField label="Название аукциона"><input
+          <FormField label="Название объявления"><input
             type="text"
             placeholder="Название"
             value={title}
@@ -423,7 +423,7 @@ export default function NewAuctionPage() {
             </label>
 
             <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
-              <h3 className="font-semibold">Закрытая часть offer-аукциона</h3>
+              <h3 className="font-semibold">Закрытая часть объявления о готовом проекте</h3>
               <p className="text-sm text-gray-600">
                 Эти данные будут лежать отдельно в auction_protected и не должны попадать в публичный fetch.
               </p>
@@ -457,7 +457,7 @@ export default function NewAuctionPage() {
             disabled={submitDisabled}
             className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition disabled:opacity-60"
           >
-            {saving ? 'Создаём...' : 'Создать аукцион'}
+            {saving ? 'Создаём...' : 'Разместить объявление'}
           </button>
         </div>
       </form>

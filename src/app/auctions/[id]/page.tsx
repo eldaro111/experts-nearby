@@ -153,7 +153,7 @@ export default function AuctionDetailsPage() {
       .maybeSingle()
 
     if (auctionError || !auctionData) {
-      logAppError('Ошибка загрузки аукциона:', auctionError)
+      logAppError('Ошибка загрузки объявления:', auctionError)
       setAuction(null)
       setLoading(false)
       return
@@ -255,7 +255,7 @@ export default function AuctionDetailsPage() {
       )
 
       if (error) {
-        showAppError(error, 'Не удалось сохранить предложение.', 'Сохранение предложения аукциона')
+        showAppError(error, 'Не удалось сохранить предложение.', 'Сохранение предложения по объявлению')
         return
       }
 
@@ -284,7 +284,7 @@ export default function AuctionDetailsPage() {
         'success'
       )
     } catch (error) {
-      showAppError(error, 'Не удалось сохранить предложение.', 'Сохранение предложения аукциона')
+      showAppError(error, 'Не удалось сохранить предложение.', 'Сохранение предложения по объявлению')
     } finally {
       setSavingBid(false)
     }
@@ -308,14 +308,14 @@ export default function AuctionDetailsPage() {
       )
 
       if (error) {
-        showAppError(error, 'Не удалось отозвать предложение.', 'Отзыв предложения аукциона')
+        showAppError(error, 'Не удалось отозвать предложение.', 'Отзыв предложения по объявлению')
         return
       }
 
       await loadAuction()
       showAppMessage('Предложение отозвано.', 'success')
     } catch (error) {
-      showAppError(error, 'Не удалось отозвать предложение.', 'Отзыв предложения аукциона')
+      showAppError(error, 'Не удалось отозвать предложение.', 'Отзыв предложения по объявлению')
     } finally {
       setWithdrawingBid(false)
     }
@@ -339,7 +339,7 @@ export default function AuctionDetailsPage() {
       )
 
       if (error) {
-        showAppError(error, 'Не удалось изменить статус аукциона.', 'Изменение статуса аукциона')
+        showAppError(error, 'Не удалось изменить статус объявления.', 'Изменение статуса объявления')
         return
       }
 
@@ -347,7 +347,7 @@ export default function AuctionDetailsPage() {
         firstRpcRow<AuctionStatusTransitionResult>(data)
 
       if (!result?.auction_id) {
-        logAppError('RPC статуса аукциона не вернул результат', data)
+        logAppError('RPC статуса объявления не вернул результат', data)
         showAppMessage('Сервер не вернул результат изменения статуса.', 'error')
         return
       }
@@ -357,15 +357,15 @@ export default function AuctionDetailsPage() {
       showAppMessage(
         result.already_completed
           ? targetStatus === 'closed'
-            ? 'Аукцион уже закрыт.'
-            : 'Аукцион уже отменён.'
+            ? 'Объявление уже закрыто.'
+            : 'Объявление уже отменено.'
           : targetStatus === 'closed'
-            ? 'Аукцион закрыт. Активные предложения отклонены.'
-            : 'Аукцион отменён. Активные предложения отклонены.',
+            ? 'Объявление закрыто. Активные предложения отклонены.'
+            : 'Объявление отменено. Активные предложения отклонены.',
         result.already_completed ? 'info' : 'success'
       )
     } catch (error) {
-      showAppError(error, 'Не удалось изменить статус аукциона.', 'Изменение статуса аукциона')
+      showAppError(error, 'Не удалось изменить статус объявления.', 'Изменение статуса объявления')
     } finally {
       setUpdatingAuctionStatus(false)
     }
@@ -375,12 +375,12 @@ export default function AuctionDetailsPage() {
     if (!auction || updatingAuctionStatus) return
 
     if (auction.status !== 'open') {
-      showAppMessage('Закрыть можно только открытый аукцион.', 'warning')
+      showAppMessage('Закрыть можно только открытое объявление.', 'warning')
       return
     }
 
     const ok = window.confirm(
-      'Закрыть аукцион без выбора победителя? Все активные предложения будут отклонены.'
+      'Закрыть объявление без выбора победителя? Все активные предложения будут отклонены.'
     )
 
     if (!ok) return
@@ -392,12 +392,12 @@ export default function AuctionDetailsPage() {
     if (!auction || updatingAuctionStatus) return
 
     if (!['open', 'draft'].includes(auction.status)) {
-      showAppMessage('Отменить можно только открытый аукцион или черновик.', 'warning')
+      showAppMessage('Отменить можно только открытое объявление или черновик.', 'warning')
       return
     }
 
     const ok = window.confirm(
-      'Отменить аукцион? Активные предложения будут отклонены, а аукцион скроется от остальных пользователей.'
+      'Отменить объявление? Активные предложения будут отклонены, а объявление скроется от остальных пользователей.'
     )
 
     if (!ok) return
@@ -410,14 +410,14 @@ export default function AuctionDetailsPage() {
 
     if (auction.status !== 'draft') {
       showAppMessage(
-        'Физически удалить можно только черновик без предложений. Для открытого аукциона используй отмену.',
+        'Физически удалить можно только черновик без предложений. Для открытого объявления используй отмену.',
         'warning'
       )
       return
     }
 
     const ok = window.confirm(
-      'Удалить аукцион безвозвратно? Это возможно только для черновика без предложений.'
+      'Удалить объявление безвозвратно? Это возможно только для черновика без предложений.'
     )
 
     if (!ok) return
@@ -435,16 +435,16 @@ export default function AuctionDetailsPage() {
       if (error) {
         showAppError(
           error,
-          'Не удалось удалить аукцион. Возможно, он уже опубликован или по нему есть предложения.',
-          'Удаление аукциона'
+          'Не удалось удалить объявление. Возможно, оно уже опубликовано или по нему есть предложения.',
+          'Удаление объявления'
         )
         return
       }
 
-      showAppMessage('Аукцион удалён.', 'success')
+      showAppMessage('Объявление удалено.', 'success')
       router.replace('/auctions')
     } catch (error) {
-      showAppError(error, 'Не удалось удалить аукцион.', 'Удаление аукциона')
+      showAppError(error, 'Не удалось удалить объявление.', 'Удаление объявления')
     } finally {
       setDeletingAuction(false)
     }
@@ -461,7 +461,7 @@ export default function AuctionDetailsPage() {
     try {
       if (status === 'accepted') {
         if (auction.status !== 'open') {
-          showAppMessage('Принять предложение можно только у открытого аукциона.', 'warning')
+          showAppMessage('Принять предложение можно только у открытого объявления.', 'warning')
           return
         }
 
@@ -474,7 +474,7 @@ export default function AuctionDetailsPage() {
         )
 
         if (error) {
-          showAppError(error, 'Не удалось принять предложение.', 'Принятие предложения аукциона')
+          showAppError(error, 'Не удалось принять предложение.', 'Принятие предложения по объявлению')
           return
         }
 
@@ -497,7 +497,7 @@ export default function AuctionDetailsPage() {
                 : 'Предложение принято. Победитель добавлен в связанный проект.'
             : result.already_completed
               ? 'Предложение уже было принято ранее.'
-              : 'Предложение принято. Аукцион закрыт.',
+              : 'Предложение принято. Объявление закрыто.',
           result.already_completed ? 'info' : 'success'
         )
 
@@ -514,7 +514,7 @@ export default function AuctionDetailsPage() {
       )
 
       if (error) {
-        showAppError(error, 'Не удалось обновить статус предложения.', 'Рассмотрение предложения аукциона')
+        showAppError(error, 'Не удалось обновить статус предложения.', 'Рассмотрение предложения по объявлению')
         return
       }
 
@@ -526,7 +526,7 @@ export default function AuctionDetailsPage() {
         'success'
       )
     } catch (error) {
-      showAppError(error, 'Не удалось обработать предложение.', 'Рассмотрение предложения аукциона')
+      showAppError(error, 'Не удалось обработать предложение.', 'Рассмотрение предложения по объявлению')
     } finally {
       setUpdatingId(null)
     }
@@ -581,7 +581,7 @@ export default function AuctionDetailsPage() {
       )
 
       if (error) {
-        showAppError(error, 'Не удалось обработать запрос доступа.', 'Решение по доступу к аукциону')
+        showAppError(error, 'Не удалось обработать запрос доступа.', 'Решение по доступу к объявлению')
         return
       }
 
@@ -593,7 +593,7 @@ export default function AuctionDetailsPage() {
         'success'
       )
     } catch (error) {
-      showAppError(error, 'Не удалось обработать запрос доступа.', 'Решение по доступу к аукциону')
+      showAppError(error, 'Не удалось обработать запрос доступа.', 'Решение по доступу к объявлению')
     } finally {
       setUpdatingId(null)
     }
@@ -604,9 +604,9 @@ export default function AuctionDetailsPage() {
   if (!auction) {
     return (
       <div className="page-shell text-center">
-        <h1 className="text-2xl font-bold mb-3">Аукцион не найден</h1>
+        <h1 className="text-2xl font-bold mb-3">Объявление не найдено</h1>
         <Link href="/auctions" className="text-blue-600 underline">
-          Вернуться к аукционам
+          Вернуться к объявлениям
         </Link>
       </div>
     )
@@ -616,7 +616,7 @@ export default function AuctionDetailsPage() {
     <div className="page-shell">
       <div className="mb-6">
         <Link href="/auctions" className="text-sm text-blue-600 hover:underline">
-          ← К списку аукционов
+          ← К списку объявлений
         </Link>
       </div>
 
@@ -665,7 +665,7 @@ export default function AuctionDetailsPage() {
 
         {isOwner && (
           <div className="mt-6 border rounded-lg bg-gray-50 p-4">
-            <h2 className="font-semibold mb-3">Управление аукционом</h2>
+            <h2 className="font-semibold mb-3">Управление объявлением</h2>
 
             <div className="flex flex-wrap gap-3 items-center">
               {['open', 'draft'].includes(auction.status) && (
@@ -684,7 +684,7 @@ export default function AuctionDetailsPage() {
                     disabled={updatingAuctionStatus}
                     className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition disabled:opacity-60"
                   >
-                    {updatingAuctionStatus ? 'Закрываем...' : 'Закрыть аукцион'}
+                    {updatingAuctionStatus ? 'Закрываем...' : 'Закрыть объявление'}
                   </button>
 
                   <button
@@ -692,7 +692,7 @@ export default function AuctionDetailsPage() {
                     disabled={updatingAuctionStatus}
                     className="bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700 transition disabled:opacity-60"
                   >
-                    {updatingAuctionStatus ? 'Отменяем...' : 'Отменить аукцион'}
+                    {updatingAuctionStatus ? 'Отменяем...' : 'Отменить объявление'}
                   </button>
                 </>
               )}
@@ -719,13 +719,13 @@ export default function AuctionDetailsPage() {
 
               {auction.status === 'closed' && (
                 <div className="text-sm text-gray-600">
-                  Аукцион закрыт. Новые предложения больше не принимаются.
+                  Объявление закрыто. Новые предложения больше не принимаются.
                 </div>
               )}
 
               {auction.status === 'cancelled' && (
                 <div className="text-sm text-orange-700">
-                  Аукцион отменён и скрыт от остальных пользователей.
+                  Объявление отменено и скрыто от остальных пользователей.
                 </div>
               )}
             </div>
@@ -853,7 +853,7 @@ export default function AuctionDetailsPage() {
             </div>
           ) : auction.status !== 'open' ? (
             <p className="text-sm text-gray-500">
-              Запросить доступ нельзя: аукцион уже закрыт или отменён.
+              Запросить доступ нельзя: объявление уже закрыто или отменено.
             </p>
           ) : (
             <div className="space-y-3">

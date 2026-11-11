@@ -110,7 +110,7 @@ const typeLabels: Record<ResultType, string> = {
   project: 'Проект',
   task: 'Задача',
   file: 'Файл',
-  auction: 'Аукцион',
+  auction: 'Объявление',
   expert: 'Эксперт',
   notification: 'Уведомление',
 }
@@ -389,7 +389,7 @@ export default function SearchPage() {
 
     if (ownerProjectsRes.error) addLoadError('Проекты', ownerProjectsRes.error)
     if (acceptedApplicationsRes.error) addLoadError('Участие в проектах', acceptedApplicationsRes.error)
-    if (auctionsRes.error) addLoadError('Аукционы', auctionsRes.error)
+    if (auctionsRes.error) addLoadError('Объявления', auctionsRes.error)
     if (expertsRes.error) addLoadError('Эксперты', expertsRes.error)
     if (notificationsRes.error) addLoadError('Уведомления', notificationsRes.error)
 
@@ -488,9 +488,9 @@ export default function SearchPage() {
     const auctionResults: SearchResult[] = ((auctionsRes.data || []) as Auction[]).map((auction) => ({
       id: `auction-${auction.id}`,
       type: 'auction',
-      title: auction.title || 'Аукцион без названия',
+      title: auction.title || 'Объявление без названия',
       subtitle: `${auctionTypeLabel[auction.type] || auction.type} · ${auction.status}`,
-      description: auction.public_summary || auction.public_description || 'Описание аукциона не указано.',
+      description: auction.public_summary || auction.public_description || 'Описание объявления не указано.',
       href: `/auctions/${auction.id}`,
       createdAt: auction.created_at,
       badge: [auction.category, auction.deal_type, auction.readiness_level].filter(Boolean).join(' · ') || undefined,
@@ -621,7 +621,7 @@ export default function SearchPage() {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Например: ортез, CAD, дедлайн, аукцион, Иван..."
+              placeholder="Например: ортез, CAD, дедлайн, объявление, Иван..."
               className="w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
             />
           </div>
@@ -637,7 +637,7 @@ export default function SearchPage() {
               <option value="project"><UiText text={"Проекты"}/></option>
               <option value="task">Задачи</option>
               <option value="file"><UiText text={"Файлы"}/></option>
-              <option value="auction"><UiText text={"Аукционы"}/></option>
+              <option value="auction"><UiText text={"Объявления"}/></option>
               <option value="expert"><UiText text={"Эксперты"}/></option>
               <option value="notification"><UiText text={"Уведомления"}/></option>
             </select>
@@ -650,7 +650,7 @@ export default function SearchPage() {
         <StatCard label="Проекты" value={countsByType.project} active={typeFilter === 'project'} onClick={() => setTypeFilter('project')} />
         <StatCard label="Задачи" value={countsByType.task} active={typeFilter === 'task'} onClick={() => setTypeFilter('task')} />
         <StatCard label="Файлы" value={countsByType.file} active={typeFilter === 'file'} onClick={() => setTypeFilter('file')} />
-        <StatCard label="Аукционы" value={countsByType.auction} active={typeFilter === 'auction'} onClick={() => setTypeFilter('auction')} />
+        <StatCard label="Объявления" value={countsByType.auction} active={typeFilter === 'auction'} onClick={() => setTypeFilter('auction')} />
         <StatCard label="Эксперты" value={countsByType.expert} active={typeFilter === 'expert'} onClick={() => setTypeFilter('expert')} />
         <StatCard label="Уведомления" value={countsByType.notification} active={typeFilter === 'notification'} onClick={() => setTypeFilter('notification')} />
       </div>
