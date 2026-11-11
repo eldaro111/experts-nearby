@@ -224,7 +224,7 @@ export function ProfileEditor({
             />
           </FormField>
           <FormField label="Часовой пояс">
-            <TimezoneSelect value={timezone} onChange={setTimezone} />
+            <TimezoneSelect value={timezone} onChange={setTimezone} suggestDevice />
           </FormField>
           <FormField label="Доступность, часов в неделю (необязательно)">
             <input

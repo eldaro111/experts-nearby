@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabaseClient'
 import { logAppError, showAppError, showAppMessage } from '@/lib/appFeedback'
+import { formatTimezone } from '@/lib/timezones'
 import { PageHeader } from '@/components/PageHeader'
 import { PageLoading, EmptyState } from '@/components/PageState'
 import { ProfileEditor } from '@/components/profile/ProfileEditor'
@@ -178,7 +179,7 @@ export default function ProfilePage() {
               </button>
             </div>
             <div className="flex flex-wrap gap-4 text-sm">
-              <span>{profile.timezone || 'Часовой пояс не указан'}</span>
+              <span>{formatTimezone(profile.timezone) || 'Часовой пояс не указан'}</span>
               <span>
                 {profile.availability_hours == null
                   ? 'Доступность не указана'

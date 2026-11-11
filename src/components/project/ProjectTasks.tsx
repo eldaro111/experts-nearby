@@ -2,11 +2,13 @@
 
 import { UiText } from '@/components/LocaleProvider'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { GripVertical } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { createNotification } from '@/lib/notifications'
 import { createProjectActivity } from '@/lib/projectActivity'
 import { logAppError, showAppMessage } from '@/lib/appFeedback'
+import { BOARD_COLUMNS, boardStatusLabel, isBoardStatus, saveTaskStatus, validateTaskRange } from '@/lib/taskSchedule'
 
 import type { ProjectMember, Task, TaskStatus } from './types'
 
@@ -50,6 +52,15 @@ export function ProjectTasks({
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null)
   const [now, setNow] = useState(initialNow)
 
+  // Board drag & drop (ER: доска задач). Overrides show the target column while saving and are
+  // removed on error, so the card returns to its previous column.
+  const [statusOverrides, setStatusOverrides] = useState<Record<string, string>>({})
+  const [movingTaskIds, setMovingTaskIds] = useState<string[]>([])
+  // A keyboard move re-renders the card in another column; this keeps focus on its handle.
+  const refocusGripRef = useRef<string | null>(null)
+  const [boardAnnouncement, setBoardAnnouncement] = useState('')
+  const [drag, setDrag] = useState<{ taskId: string; title: string; from: string; over: TaskStatus | null; x: number; y: number } | null>(null)
+
   useEffect(() => {
     const timer = window.setInterval(() => {
       setNow(Date.now())
@@ -58,9 +69,16 @@ export function ProjectTasks({
     return () => window.clearInterval(timer)
   }, [])
 
-  const todoTasks = tasks.filter((t) => t.status === 'todo')
-  const doingTasks = tasks.filter((t) => t.status === 'doing')
-  const doneTasks = tasks.filter((t) => t.status === 'done')
+  const effectiveStatus = (task: Task): string => statusOverrides[task.id] ?? task.status
+  // Unknown statuses are shown in a separate section instead of being hidden.
+  const otherStatusTasks = tasks.filter((t) => !isBoardStatus(effectiveStatus(t)))
+
+  useEffect(() => {
+    if (!drag) return
+    const cancel = (event: KeyboardEvent) => { if (event.key === 'Escape') setDrag(null) }
+    document.addEventListener('keydown', cancel)
+    return () => document.removeEventListener('keydown', cancel)
+  }, [drag])
 
   const getMemberName = (userId: string | null) => {
     if (!userId) return 'Не назначен'
@@ -296,53 +314,55 @@ export function ProjectTasks({
 
   const handleChangeTaskStatus = async (taskId: string, status: TaskStatus) => {
     const task = tasks.find((t) => t.id === taskId)
+    if (!task) return
+    // One request per task at a time: repeated drops/clicks are ignored while saving.
+    if (movingTaskIds.includes(taskId)) return
+    const from = effectiveStatus(task)
+    if (from === status) return
 
-    const patch: Record<string, string | null> = {
-      status,
-    }
+    setMovingTaskIds((ids) => [...ids, taskId])
+    setStatusOverrides((current) => ({ ...current, [taskId]: status }))
+    const clearOverride = () => setStatusOverrides((current) => {
+      const next = { ...current }
+      delete next[taskId]
+      return next
+    })
 
-    if (status === 'done') {
-      patch.completed_at = new Date().toISOString()
-    } else {
-      patch.completed_at = null
-    }
+    const result = await saveTaskStatus(task, status)
 
-    const { error } = await supabase
-      .from('tasks')
-      .update(patch)
-      .eq('id', taskId)
-
-    if (error) {
-      logAppError('Ошибка обновления статуса задачи:', error)
-      showAppMessage('Ошибка обновления статуса: ' + error.message)
+    if (!result.ok) {
+      clearOverride()
+      setMovingTaskIds((ids) => ids.filter((id) => id !== taskId))
+      logAppError('Ошибка обновления статуса задачи:', result.message)
+      showAppMessage(result.message, 'error', 7000)
+      setBoardAnnouncement(`Задача «${task.title}» осталась в колонке «${boardStatusLabel(from)}». ${result.message}`)
       return
     }
 
-    if (task) {
-      await createProjectActivity({
-        projectId,
-        actorId: currentUserId,
-        type: status === 'done' ? 'task_completed' : 'task_status_changed',
-        title:
-          status === 'done'
-            ? `Задача «${task.title}» завершена`
-            : `Статус задачи «${task.title}» изменён`,
-        body: `Новый статус: ${status}.`,
-        entityType: 'task',
-        entityId: task.id,
-        metadata: {
-          task_title: task.title,
-          old_status: task.status,
-          new_status: status,
-        },
-      })
-    }
+    // History is recorded by the server trigger; the shim below is kept for compatibility.
+    await createProjectActivity({
+      projectId,
+      actorId: currentUserId,
+      type: status === 'done' ? 'task_completed' : 'task_status_changed',
+      title:
+        status === 'done'
+          ? `Задача «${task.title}» завершена`
+          : `Статус задачи «${task.title}» изменён`,
+      body: `Новый статус: ${boardStatusLabel(status)}.`,
+      entityType: 'task',
+      entityId: task.id,
+      metadata: {
+        task_title: task.title,
+        old_status: task.status,
+        new_status: status,
+      },
+    })
 
-    if (status === 'done' && task) {
+    if (status === 'done') {
       await notifyProjectOwner({
         type: 'task_completed',
         title: 'Задача завершена',
-        body: `Задача «${task.title}» переведена в Done.`,
+        body: `Задача «${task.title}» переведена в «Готово».`,
         payload: {
           task_id: task.id,
           task_title: task.title,
@@ -350,7 +370,63 @@ export function ProjectTasks({
       })
     }
 
+    setBoardAnnouncement(`Задача «${task.title}» перемещена в колонку «${boardStatusLabel(status)}».`)
     await onTasksChanged()
+    clearOverride()
+    setMovingTaskIds((ids) => ids.filter((id) => id !== taskId))
+  }
+
+  const dropTargetAt = (x: number, y: number): TaskStatus | null => {
+    const target = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-drop-status]')
+    const status = target?.dataset.dropStatus || ''
+    return isBoardStatus(status) ? status : null
+  }
+
+  const handleGripPointerDown = (event: ReactPointerEvent<HTMLButtonElement>, task: Task) => {
+    if (event.button !== 0 || movingTaskIds.includes(task.id)) return
+    // Stop text selection / native drag, which would otherwise cancel the pointer stream.
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setDrag({ taskId: task.id, title: task.title, from: effectiveStatus(task), over: null, x: event.clientX, y: event.clientY })
+  }
+
+  const handleGripPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!drag) return
+    // Keep scrolling possible on narrow screens where columns are stacked.
+    if (event.clientY < 72) window.scrollBy(0, -14)
+    else if (event.clientY > window.innerHeight - 72) window.scrollBy(0, 14)
+    setDrag({ ...drag, x: event.clientX, y: event.clientY, over: dropTargetAt(event.clientX, event.clientY) })
+  }
+
+  const handleGripPointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!drag) return
+    const target = dropTargetAt(event.clientX, event.clientY)
+    const { taskId, from } = drag
+    setDrag(null)
+    if (target && target !== from) void handleChangeTaskStatus(taskId, target)
+  }
+
+  useEffect(() => {
+    const taskId = refocusGripRef.current
+    if (!taskId) return
+    // Restore focus only if it was lost with the old card; never take it from another element.
+    const active = document.activeElement
+    if (!active || active === document.body) {
+      document.querySelector<HTMLButtonElement>(`[data-task-grip="${CSS.escape(taskId)}"]`)?.focus()
+    }
+    if (!movingTaskIds.includes(taskId)) refocusGripRef.current = null
+  })
+
+  const handleGripKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, task: Task) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    event.preventDefault()
+    if (movingTaskIds.includes(task.id)) return
+    refocusGripRef.current = task.id
+    const from = effectiveStatus(task)
+    const index = BOARD_COLUMNS.findIndex((column) => column.status === from)
+    const nextIndex = index < 0 ? 0 : index + (event.key === 'ArrowRight' ? 1 : -1)
+    const target = BOARD_COLUMNS[nextIndex]
+    if (target) void handleChangeTaskStatus(task.id, target.status)
   }
 
   const handleChangeTaskAssignee = async (taskId: string, assigneeId: string) => {
@@ -434,6 +510,12 @@ export function ProjectTasks({
 
     if (!title) {
       showAppMessage('Название задачи не может быть пустым.')
+      return
+    }
+
+    const rangeError = validateTaskRange(startAt, dueAt)
+    if (rangeError) {
+      showAppMessage(rangeError, 'warning')
       return
     }
 
@@ -606,20 +688,27 @@ export function ProjectTasks({
   const renderTaskColumn = (
     title: string,
     columnTasks: Task[],
-    status: TaskStatus
+    status: string,
+    droppable = true
   ) => (
-    <div className="border rounded-xl bg-white p-5 shadow-sm">
-      <h2 className="text-xl font-semibold mb-4">{title}</h2>
+    <section
+      className={`task-column border rounded-xl bg-white p-5 shadow-sm ${drag && droppable && drag.over === status && drag.from !== status ? 'is-drop-target' : ''}`}
+      data-drop-status={droppable ? status : undefined}
+      aria-label={`${title}: ${columnTasks.length}`}
+    >
+      <h2 className="text-xl font-semibold mb-4 flex items-baseline justify-between gap-2"><span>{title}</span><span className="text-sm font-normal text-gray-500">{columnTasks.length}</span></h2>
 
       {columnTasks.length === 0 ? (
-        <p className="text-sm text-gray-500">Пока пусто.</p>
+        <p className="text-sm text-gray-500">{droppable ? 'Пока пусто. Перетащите сюда задачу.' : 'Пока пусто.'}</p>
       ) : (
         <div className="space-y-3">
           {columnTasks.map((task) => {
             const isEditing = editingTaskId === task.id
+            const isMoving = movingTaskIds.includes(task.id)
+            const currentStatus = effectiveStatus(task)
 
             return (
-              <div key={task.id} className="border rounded-lg p-3 bg-gray-50">
+              <div key={task.id} className={`task-card border rounded-lg p-3 bg-gray-50 ${isMoving ? 'is-saving' : ''} ${drag?.taskId === task.id ? 'is-dragging' : ''}`} aria-busy={isMoving || undefined}>
                 {isEditing ? (
                   <div className="space-y-2">
                     <input
@@ -696,7 +785,26 @@ export function ProjectTasks({
                   </div>
                 ) : (
                   <>
-                    <div className="font-medium">{task.title}</div>
+                    <div className="flex items-start gap-2">
+                      <button
+                        type="button"
+                        className="task-drag-handle"
+                        aria-label={`Переместить задачу «${task.title}»`}
+                        aria-describedby="task-board-drag-hint"
+                        aria-disabled={isMoving || undefined}
+                        data-task-grip={task.id}
+                        onPointerDown={(event) => handleGripPointerDown(event, task)}
+                        onPointerMove={handleGripPointerMove}
+                        onPointerUp={handleGripPointerUp}
+                        onPointerCancel={() => setDrag(null)}
+                        onKeyDown={(event) => handleGripKeyDown(event, task)}
+                      >
+                        <GripVertical size={16} aria-hidden="true" />
+                      </button>
+                      <div className="font-medium min-w-0 flex-1">{task.title}</div>
+                      {isMoving && <span className="text-xs text-blue-700 shrink-0">Сохраняем…</span>}
+                      {!isBoardStatus(currentStatus) && <span className="text-xs rounded bg-amber-50 border border-amber-200 text-amber-800 px-1.5 py-0.5 shrink-0">Статус: {currentStatus}</span>}
+                    </div>
 
                     {task.description && (
                       <div className="text-sm text-gray-600 mt-1">
@@ -767,36 +875,39 @@ export function ProjectTasks({
                     </div>
 
                     <div className="flex gap-2 mt-3 flex-wrap">
-                      {status !== 'todo' && (
+                      {currentStatus !== 'todo' && (
                         <button
                           onClick={() =>
                             handleChangeTaskStatus(task.id, 'todo')
                           }
-                          className="bg-gray-200 text-gray-800 text-xs px-3 py-1 rounded hover:bg-gray-300 transition"
+                          disabled={isMoving}
+                          className="bg-gray-200 text-gray-800 text-xs px-3 py-1 rounded hover:bg-gray-300 transition disabled:opacity-60"
                         >
-                          В To Do
+                          В «Нужно сделать»
                         </button>
                       )}
 
-                      {status !== 'doing' && (
+                      {currentStatus !== 'doing' && (
                         <button
                           onClick={() =>
                             handleChangeTaskStatus(task.id, 'doing')
                           }
-                          className="bg-yellow-500 text-white text-xs px-3 py-1 rounded hover:bg-yellow-600 transition"
+                          disabled={isMoving}
+                          className="bg-yellow-500 text-white text-xs px-3 py-1 rounded hover:bg-yellow-600 transition disabled:opacity-60"
                         >
-                          В Doing
+                          В работу
                         </button>
                       )}
 
-                      {status !== 'done' && (
+                      {currentStatus !== 'done' && (
                         <button
                           onClick={() =>
                             handleChangeTaskStatus(task.id, 'done')
                           }
-                          className="bg-green-600 text-white text-xs px-3 py-1 rounded hover:bg-green-700 transition"
+                          disabled={isMoving}
+                          className="bg-green-600 text-white text-xs px-3 py-1 rounded hover:bg-green-700 transition disabled:opacity-60"
                         >
-                          В Done
+                          Готово
                         </button>
                       )}
 
@@ -851,7 +962,7 @@ export function ProjectTasks({
           })}
         </div>
       )}
-    </div>
+    </section>
   )
 
   return (
@@ -947,12 +1058,29 @@ export function ProjectTasks({
           Загрузка задач...
         </div>
       ) : (
-        <div className="grid gap-6 md:grid-cols-3">
-          {renderTaskColumn('To Do', todoTasks, 'todo')}
-          {renderTaskColumn('Doing', doingTasks, 'doing')}
-          {renderTaskColumn('Done', doneTasks, 'done')}
-        </div>
+        <>
+          <p id="task-board-drag-hint" className="text-sm text-gray-500 mb-3">
+            Перетащите задачу за значок слева от названия в другую колонку. С клавиатуры: фокус на значке и стрелки влево/вправо. Кнопки статуса в карточке тоже работают.
+          </p>
+          <div className="grid gap-6 md:grid-cols-3">
+            {BOARD_COLUMNS.map((column) => (
+              <div key={column.status}>{renderTaskColumn(column.label, tasks.filter((t) => effectiveStatus(t) === column.status), column.status)}</div>
+            ))}
+          </div>
+          {otherStatusTasks.length > 0 && (
+            <div className="mt-6">
+              {renderTaskColumn('Другие статусы', otherStatusTasks, 'other', false)}
+              <p className="text-xs text-gray-500 mt-2">У этих задач статус, которого нет на доске. Он сохранён без изменений; перенесите задачу в колонку, если нужно.</p>
+            </div>
+          )}
+          {drag && (
+            <div className="task-drag-ghost" style={{ left: drag.x, top: drag.y }} aria-hidden="true">
+              {drag.title}
+            </div>
+          )}
+        </>
       )}
+      <div className="sr-only" aria-live="polite">{boardAnnouncement}</div>
     </>
   )
 }

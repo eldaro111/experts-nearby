@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { UiText } from '@/components/LocaleProvider'
+import { AdSlot } from '@/components/AdSlot'
 import { ArrowRight, ArrowUpRight, BriefcaseBusiness, UsersRound, ListChecks, Files, MessagesSquare, Fingerprint, Handshake, Layers3, CalendarDays, Check, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -47,6 +48,7 @@ export default function Home() {
         <Link href="/experts" className="entry-point"><span className="entry-icon"><UsersRound size={24} /></span><div><span className="entry-label"><UiText text={"Для авторов проектов"}/></span><h2><UiText text={"Собрать команду"}/></h2><p><UiText text={"Эксперты под конкретный результат"}/></p></div><ArrowUpRight className="entry-arrow" size={21} /></Link>
         <Link href="/auctions" className="entry-point"><span className="entry-icon"><Handshake size={24} aria-hidden="true" /></span><div><span className="entry-label"><UiText text={"Для заказчиков и команд"}/></span><h2><UiText text={"Открыть рынок проектов"}/></h2><p><UiText text={"Заказы на разработку и готовые проекты"}/></p></div><ArrowUpRight className="entry-arrow" size={21} /></Link>
       </section>
+      <AdSlot id="home-after-entry-points" />
       <section className="university-home-band"><div><p className="eyebrow">ВУЗам и инженерным школам</p><h2>Учебные проекты с практическим результатом</h2><p>Ваш вуз, направление и группа — в общей рабочей среде.</p></div><Link href="/universities" className="action-primary">Открыть раздел «ВУЗам»<ArrowUpRight size={18}/></Link></section>
       <section className="home-section">
         <div className="section-heading"><div><p className="eyebrow"><UiText text={"Как это работает"}/></p><h2><UiText text={"Чёткий путь к результату"}/></h2></div><p><UiText text={"Поиск команды и совместная работа"}/><br className="hidden sm:block" /><UiText text={"становятся одним процессом."}/></p></div>

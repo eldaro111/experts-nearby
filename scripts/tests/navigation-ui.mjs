@@ -71,6 +71,8 @@ async function context({ signed = false, width = 1440, touch = false } = {}) {
       user: { id: userId, email: 'test@example.ru' },
     })), { userId, claims })
   }
+  // Close every WebSocket (Supabase Realtime) without connecting anywhere.
+  await c.routeWebSocket(/.*/, (ws) => ws.close())
   await c.route('**/*', (route) => {
     const u = new URL(route.request().url())
     return ['127.0.0.1', 'pilot-test.supabase.co'].includes(u.hostname) ? route.continue() : route.abort()

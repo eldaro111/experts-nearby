@@ -347,4 +347,18 @@ export const english: Record<string, string> = {
   'Заказы на разработку и готовые проекты': 'Development requests and ready-made projects',
   'Мои объявления и предложения': 'My listings and proposals',
   'Объявления и предложения': 'Listings and proposals',
+  // ER-002 time zones.
+  'Часовой пояс проекта': 'Project time zone',
+  'Любой часовой пояс': 'Any time zone',
+  'Город, страна или UTC+3': 'City, country or UTC+3',
+  'Очистить часовой пояс': 'Clear time zone',
+  'Показать варианты': 'Show options',
+  'Скрыть варианты': 'Hide options',
+  'Часовые пояса': 'Time zones',
+  'Ничего не найдено. Попробуйте название города, страны или UTC+3.': 'Nothing found. Try a city, a country or UTC+3.',
+  'Показаны первые 100 вариантов — уточните запрос.': 'Showing the first 100 options — refine your search.',
+  'Указать часовой пояс устройства:': 'Use this device time zone:',
+  'Ранее указанное значение': 'Previously entered value',
+  'Показаны проекты с этим часовым поясом. Проекты без указанного пояса скрыты.': 'Showing projects in this time zone. Projects without a time zone are hidden.',
+  'Поиск по городу, стране, IANA или смещению, например UTC+7.': 'Search by city, country, IANA name or offset, e.g. UTC+7.',
 }

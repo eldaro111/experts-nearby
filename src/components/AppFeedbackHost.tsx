@@ -99,7 +99,7 @@ export function AppFeedbackHost() {
         <div
           key={item.id}
           role={item.tone === 'error' ? 'alert' : 'status'}
-          className={`rounded-xl border p-4 shadow-lg ${toneClasses[item.tone]}`}
+          className={`app-toast rounded-xl border p-4 shadow-lg ${toneClasses[item.tone]}`}
         >
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">

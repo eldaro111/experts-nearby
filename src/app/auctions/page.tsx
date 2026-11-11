@@ -77,7 +77,7 @@ export default function AuctionsPage() {
   return (
     <div className="page-shell">
       <PageHeader eyebrow="Заказы на разработку и готовые проекты" title="Рынок проектов" description="Найдите заказ на разработку или предложите решение для внедрения, лицензирования и партнёрства.">
-        <Button asChild variant="outline" className="action-secondary"><Link href="/auctions/my"><UiText text={"Мои объявления"}/></Link></Button>
+        <Button asChild variant="outline" className="action-secondary"><Link href="/auctions/my"><UiText text={"Мои объявления и предложения"}/></Link></Button>
         <Button asChild className="action-primary"><Link href="/auctions/new"><Plus size={18} />Разместить объявление</Link></Button>
       </PageHeader>
       <section className="filter-panel" aria-label="Фильтры объявлений">
