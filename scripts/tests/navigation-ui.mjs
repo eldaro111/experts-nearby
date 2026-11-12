@@ -10,6 +10,11 @@ import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 
+/** Waits for finite animations (menu reveal, arrow turn) so screenshots show the settled state. */
+const settle = (page) => page.evaluate(() => Promise.all(document.getAnimations()
+  .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+  .map((animation) => animation.finished.catch(() => null))))
+
 const root = fileURLToPath(new URL('../../', import.meta.url))
 const port = 3002
 const base = `http://127.0.0.1:${port}`
@@ -152,7 +157,7 @@ try {
       assert.ok(await panel.getByRole('link', { name: 'Рынок проектов', exact: true }).isVisible())
       assert.equal(await panel.getByRole('link', { name: 'Мои проекты' }).count(), 0)
       assert.ok(await noOverflow(page))
-      await page.screenshot({ path: `${out}/desktop-1440-projects-open.png` })
+      await settle(page); await page.screenshot({ path: `${out}/desktop-1440-projects-open.png` })
     })
 
     await check('1440: Escape closes and returns focus to the trigger', async () => {
@@ -252,7 +257,7 @@ try {
       await enProjects.click()
       assert.ok(await page.locator('#projects-navigation').getByRole('link', { name: 'Project market', exact: true }).isVisible())
       assert.ok(await page.locator('footer').getByRole('link', { name: 'Help', exact: true }).isVisible())
-      await page.screenshot({ path: `${out}/desktop-1440-projects-open-en.png` })
+      await settle(page); await page.screenshot({ path: `${out}/desktop-1440-projects-open-en.png` })
       await page.goto(base + '/auctions')
       await page.locator('h1').first().waitFor()
       assert.ok(!/auction/i.test(await page.locator('body').innerText()), 'English /auctions mentions auction')
@@ -275,7 +280,7 @@ try {
       const projects = page.getByRole('navigation', { name: 'Основная навигация' }).getByRole('button', { name: 'Проекты', exact: true })
       await projects.click()
       assert.deepEqual(await hrefs(page.locator('#projects-navigation')), ['/listings', '/listings/new', '/auctions', '/dashboard#my-projects'])
-      await page.screenshot({ path: `${out}/desktop-1440-signed-projects-open.png` })
+      await settle(page); await page.screenshot({ path: `${out}/desktop-1440-signed-projects-open.png` })
       await page.keyboard.press('Escape')
       assert.ok(await noOverflow(page))
       assert.ok(await mainBelowHeader(page))
@@ -286,7 +291,7 @@ try {
       assert.ok(await page.getByText('Готовый проект', { exact: true }).first().isVisible())
       assert.ok(await page.getByText('Заказ на разработку', { exact: true }).first().isVisible())
       assert.ok(await page.getByRole('button', { name: 'Разместить объявление' }).isVisible())
-      await page.screenshot({ path: `${out}/market-new-listing-1440.png`, fullPage: true })
+      await settle(page); await page.screenshot({ path: `${out}/market-new-listing-1440.png`, fullPage: true })
     })
     await check('signed-in: «Мои проекты» opens the dashboard section', async () => {
       await page.goto(base + '/')
@@ -303,7 +308,7 @@ try {
       for (const route of ['/dashboard', '/auctions/my', '/auctions/new', '/']) {
         await page.goto(base + route)
         await page.locator('h1').first().waitFor({ timeout: 10000 }).catch(async (error) => {
-          await page.screenshot({ path: `${out}/debug-${route.replaceAll('/', '_')}.png`, fullPage: true })
+          await settle(page); await page.screenshot({ path: `${out}/debug-${route.replaceAll('/', '_')}.png`, fullPage: true })
           throw new Error(`${route}: ${error.message.split(String.fromCharCode(10))[0]}`)
         })
         const text = await page.locator('body').innerText()
@@ -359,9 +364,9 @@ try {
       for (const href of ['/', '/experts', '/news', '/search']) assert.ok(top.includes(href), href)
       assert.ok(!top.includes('/help'))
       assert.ok(await noOverflow(page))
-      await page.screenshot({ path: `${out}/mobile-${width}-partners-open.png` })
+      await settle(page); await page.screenshot({ path: `${out}/mobile-${width}-partners-open.png` })
       await projects.tap()
-      await page.screenshot({ path: `${out}/mobile-${width}-projects-open.png` })
+      await settle(page); await page.screenshot({ path: `${out}/mobile-${width}-projects-open.png` })
     })
     await check(`${width}: tapping «Рынок проектов» navigates and closes menu`, async () => {
       await page.locator('#mobile-projects-navigation').getByRole('link', { name: 'Рынок проектов' }).tap()
@@ -382,7 +387,7 @@ try {
       await page.goto(base + '/')
       await page.locator('footer').scrollIntoViewIfNeeded()
       assert.ok(await noOverflow(page))
-      await page.screenshot({ path: `${out}/mobile-${width}-home.png`, fullPage: true })
+      await settle(page); await page.screenshot({ path: `${out}/mobile-${width}-home.png`, fullPage: true })
     })
     await c.close()
   }
@@ -399,7 +404,7 @@ try {
       await page.locator('#mobile-navigation').getByRole('button', { name: 'Проекты', exact: true }).tap()
       assert.deepEqual(await hrefs(page.locator('#mobile-projects-navigation')), ['/listings', '/listings/new', '/auctions', '/dashboard#my-projects'])
       assert.ok(await noOverflow(page))
-      await page.screenshot({ path: `${out}/mobile-360-signed-projects-open.png` })
+      await settle(page); await page.screenshot({ path: `${out}/mobile-360-signed-projects-open.png` })
     })
     await c.close()
   }

@@ -242,7 +242,15 @@ export function ProjectGantt({
       {dated.length === 0 ? (
         <p className="text-sm text-gray-500">Пока нет задач со сроками.</p>
       ) : (
-        <div ref={(node) => { if (node && !node.dataset.scrolled) { node.dataset.scrolled = "1"; node.scrollLeft = Math.max(0, todayX - 2 * LABEL_WIDTH) } }} className="gantt-scroll" role="region" aria-label="Диаграмма Ганта" tabIndex={0}>
+        <div
+          ref={(node) => {
+            if (!node || node.dataset.scrolled) return
+            node.dataset.scrolled = '1'
+            // Open on the current period: today about a third into the visible track, also on narrow screens.
+            const label = node.querySelector<HTMLElement>('.gantt-label')?.offsetWidth ?? LABEL_WIDTH
+            node.scrollLeft = Math.max(0, todayX - Math.max(DAY_WIDTH, (node.clientWidth - label) / 3))
+          }}
+          className="gantt-scroll" role="region" aria-label="Диаграмма Ганта" tabIndex={0}>
           <div className="gantt-grid" style={{ width: `calc(var(--gantt-label) + ${trackWidth}px)` }}>
             <div className="gantt-header" style={{ gridTemplateColumns: `var(--gantt-label) ${trackWidth}px` }}>
               <div className="gantt-label gantt-sticky">Задача</div>

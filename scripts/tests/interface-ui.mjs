@@ -538,10 +538,19 @@ try {
     })
     for (const width of [768, 360]) {
       await page.setViewportSize({ width, height: 900 })
-      await check(`gantt ${width}: chart scrolls inside its own area; page has no horizontal overflow`, async () => {
+      await check(`gantt ${width}: chart scrolls inside its own area, opens on today; page has no horizontal overflow`, async () => {
+        // Mount at this width, as on a real phone or tablet.
+        await page.reload()
+        await page.locator('.gantt-bar').first().waitFor()
         await page.locator('.gantt-scroll').scrollIntoViewIfNeeded()
         assert.ok(await noHorizontalOverflow(page))
         assert.ok(await page.locator('.gantt-scroll').evaluate((el) => el.scrollWidth > el.clientWidth))
+        const todayShown = await page.locator('.gantt-scroll').evaluate((el) => {
+          const today = el.querySelector('.gantt-today').getBoundingClientRect()
+          const label = el.querySelector('.gantt-row .gantt-label').getBoundingClientRect()
+          return today.left >= label.right && today.left <= el.getBoundingClientRect().right
+        })
+        assert.ok(todayShown, 'today line is in the visible part of the track')
         await dismissToasts(page)
         await settle(page)
         await page.locator('.gantt').screenshot({ path: `${out}/gantt-${width}.png` })
