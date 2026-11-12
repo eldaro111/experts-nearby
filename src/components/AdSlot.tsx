@@ -4,7 +4,8 @@ import { AD_SLOTS, isAdSlotVisible, type AdSlotId } from '@/lib/adSlots'
 /**
  * Managed advertising place (ER-003). Renders nothing when disabled, so no empty band remains.
  * In demo mode it shows a neutral placeholder that is clearly not an advertiser and not a project card.
- * Server component: no client JavaScript, no network requests, no tracking.
+ * No state, effects, network requests or tracking. Rendered on the server on the home page;
+ * inside client pages (catalogues) it is part of their bundle.
  */
 export function AdSlot({ id, className = '' }: { id: AdSlotId; className?: string }) {
   if (!isAdSlotVisible(id)) return null
