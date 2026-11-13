@@ -8,6 +8,7 @@ import { logAppError, showAppMessage } from '@/lib/appFeedback'
 
 import type { Listing, ProjectEvent, ProjectMember, Task } from './types'
 import { ProjectGantt } from './ProjectGantt'
+import { CalendarDay, momentTime, rangeTime, type CalendarDayItem } from '@/components/calendar/CalendarDay'
 import { boardStatusLabel } from '@/lib/taskLabels'
 
 const initialNow = Date.now()
@@ -33,6 +34,8 @@ interface ProjectCalendarProps {
   projectProgress: number
   /** Reloads tasks after a date change so board, Gantt and calendar stay consistent. */
   onTasksChanged?: () => Promise<void>
+  /** Opens the task view (`?task=<id>`), the same one for the calendar and the Gantt chart. */
+  onOpenTask?: (taskId: string) => void
 }
 
 export function ProjectCalendar({
@@ -43,6 +46,7 @@ export function ProjectCalendar({
   tasks,
   projectProgress,
   onTasksChanged,
+  onOpenTask,
 }: ProjectCalendarProps) {
   const [events, setEvents] = useState<ProjectEvent[]>([])
   const [eventsLoading, setEventsLoading] = useState(false)
@@ -406,6 +410,51 @@ export function ProjectCalendar({
     return eventTypeLabel(kind)
   }
 
+  // Details of one calendar record for the day panel. Only stored facts: project events have no
+  // list of invited people in the data model, and a task assignee is not treated as an attendee.
+  const toDayItem = (item: CalendarItem): CalendarDayItem => {
+    const sourceId = item.sourceId || ''
+    if (item.kind === 'task-start' || item.kind === 'task-due') {
+      const task = tasks.find((candidate) => candidate.id === sourceId)
+      return {
+        id: item.id,
+        tone: item.kind,
+        label: item.kind === 'task-start' ? 'Старт задачи' : 'Дедлайн задачи',
+        title: item.title,
+        time: momentTime(item.starts_at),
+        status: task ? boardStatusLabel(task.status) : null,
+        overdue: item.isOverdue,
+        people: { label: 'Исполнитель', value: task?.assignee_id ? getMemberName(task.assignee_id) : 'не назначен' },
+        action: {
+          label: 'Открыть задачу',
+          href: `/projects/${projectId}?task=${encodeURIComponent(sourceId)}`,
+          onOpen: onOpenTask ? () => onOpenTask(sourceId) : undefined,
+        },
+      }
+    }
+    if (item.kind === 'project-deadline') {
+      return {
+        id: item.id,
+        tone: 'project-deadline',
+        label: 'Дедлайн проекта',
+        title: item.title,
+        time: momentTime(item.starts_at),
+        overdue: item.isOverdue,
+        action: { label: 'К дедлайну проекта', href: '#project-top' },
+      }
+    }
+    const event = events.find((candidate) => candidate.id === sourceId)
+    return {
+      id: item.id,
+      tone: 'event',
+      label: eventTypeLabel(item.kind),
+      title: item.title,
+      time: rangeTime(event?.starts_at, event?.ends_at),
+      people: event?.created_by ? { label: 'Автор события', value: getMemberName(event.created_by) } : null,
+      action: { label: 'К событию в списке', href: `#event-${sourceId}` },
+    }
+  }
+
   const calendarItemClassName = (item: (typeof calendarItems)[number]) => {
     if (item.isOverdue) return 'bg-red-50 border-red-200 text-red-700'
     if (item.kind === 'project-deadline') return 'bg-emerald-50 border-emerald-200 text-emerald-700'
@@ -493,7 +542,7 @@ export function ProjectCalendar({
           <div>
             <h3 className="font-semibold">Календарь проекта</h3>
             <p className="text-sm text-gray-500">
-              Дедлайны задач и события проекта попадают сюда автоматически.
+              Дедлайны задач и события проекта попадают сюда автоматически. Наведите указатель на число, перейдите к нему клавишей Tab или нажмите его, чтобы увидеть подробности дня.
             </p>
           </div>
 
@@ -560,20 +609,17 @@ export function ProjectCalendar({
               cell.date.getDate() === today.getDate()
 
             return (
-              <div
+              <CalendarDay
                 key={cell.id}
+                date={cell.date}
+                items={items.map(toDayItem)}
                 className={`min-h-[110px] rounded-lg border p-2 bg-white ${
                   isToday ? 'border-blue-500 ring-1 ring-blue-200' : 'border-gray-200'
                 }`}
+                numberClassName={`text-xs font-semibold mb-2 ${
+                  isToday ? 'text-blue-700' : 'text-gray-700'
+                }`}
               >
-                <div
-                  className={`text-xs font-semibold mb-2 ${
-                    isToday ? 'text-blue-700' : 'text-gray-700'
-                  }`}
-                >
-                  {cell.date.getDate()}
-                </div>
-
                 {items.length === 0 ? (
                   <div className="text-xs text-gray-300">—</div>
                 ) : (
@@ -581,7 +627,6 @@ export function ProjectCalendar({
                     {items.slice(0, 3).map((item) => (
                       <div
                         key={item.id}
-                        title={`${item.title} · ${item.subtitle} · ${formatDateTime(item.starts_at || null)} → ${formatDateTime(item.ends_at || null)}`}
                         className={`rounded px-2 py-1 text-xs leading-tight border ${
                           calendarItemClassName(item)
                         }`}
@@ -601,7 +646,7 @@ export function ProjectCalendar({
                     )}
                   </div>
                 )}
-              </div>
+              </CalendarDay>
             )
           })}
         </div>
@@ -631,6 +676,7 @@ export function ProjectCalendar({
           readOnly={Boolean(listing.completed_at)}
           projectDeadline={listing.deadline_at}
           onTasksChanged={onTasksChanged}
+          onOpenTask={onOpenTask}
         />
       </div>
 
@@ -648,7 +694,8 @@ export function ProjectCalendar({
           {timelineItems.map((item) => (
             <div
               key={item.id}
-              className={`border rounded-lg p-4 ${
+              id={item.id}
+              className={`timeline-item scroll-mt-40 border rounded-lg p-4 ${
                 item.isOverdue
                   ? 'bg-red-50 border-red-200'
                   : 'bg-gray-50 border-gray-200'

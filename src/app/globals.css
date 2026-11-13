@@ -234,15 +234,23 @@
 /* Task board drag & drop: only between columns; buttons remain the alternative. */
 .task-column { transition: background-color 160ms, border-color 160ms, box-shadow 160ms; }
 .task-column.is-drop-target { background: #eef4ff; border-color: #8fb0f5; box-shadow: 0 0 0 3px #245ce31f; }
-.task-card { transition: opacity 160ms, box-shadow 160ms; }
-.task-card.is-dragging { opacity: .45; }
+.task-card { position: relative; transition: opacity 160ms, box-shadow 180ms, transform 180ms, border-color 180ms; }
+/* The original stays in place as a faint outline while its copy follows the pointer. */
+.task-card.is-dragging { opacity: .35; border-style: dashed; box-shadow: none; }
+.task-card.is-settling { z-index: 2; box-shadow: 0 10px 26px -12px #142e5740; }
+.task-card.is-revealed { border-color: #5088f0; box-shadow: 0 0 0 3px #245ce32e; }
+.task-drop-placeholder { display: grid; place-items: center; border: 2px dashed #8fb0f5; border-radius: .5rem; background: #f4f8ff; color: #245ce3; font-size: .8125rem; font-weight: 550; animation: pop-in 160ms ease-out; }
 .task-card.is-saving { opacity: .7; }
 .task-drag-handle { user-select: none; -webkit-user-select: none; display: inline-grid; place-items: center; flex-shrink: 0; width: 32px; height: 32px; margin: -6px 0 -6px -6px; border-radius: .5rem; color: #6a7b93; cursor: grab; touch-action: none; }
 .task-drag-handle:hover { background: #e3ecfb; color: #245ce3; }
 .task-drag-handle:active { cursor: grabbing; }
 .task-drag-handle[aria-disabled="true"] { cursor: progress; opacity: .5; }
 @media (pointer: coarse) { .task-drag-handle { width: 44px; height: 44px; margin: -10px 0 -10px -10px; } }
-.task-drag-ghost { position: fixed; z-index: 60; pointer-events: none; transform: translate(12px, 12px); max-width: 260px; padding: .55rem .8rem; border-radius: .6rem; background: #fff; border: 1px solid #8fb0f5; box-shadow: 0 12px 32px #142e5733; font-size: .875rem; font-weight: 600; color: #14233d; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Visual copy of the whole card under the pointer: same size, lifted with a shadow. */
+.task-drag-ghost { position: fixed; left: 0; top: 0; z-index: 60; margin: 0; pointer-events: none; box-sizing: border-box; overflow: hidden; transform: translate3d(var(--drag-x, 0px), var(--drag-y, 0px), 0) rotate(-1.2deg) scale(1.02); box-shadow: 0 22px 44px -14px #142e5759, 0 2px 6px #142e571f; border-color: #8fb0f5 !important; background: #fff !important; opacity: .97; cursor: grabbing; will-change: transform; transition: none !important; animation: none !important; }
+body.is-task-dragging, body.is-task-dragging * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
+/* No competing hover effects while a card is being dragged. */
+.task-board.is-dragging .task-card:hover { transform: none; box-shadow: none; }
 
 /* Gantt chart of project tasks. */
 .gantt { --gantt-label: 190px; }
@@ -265,6 +273,16 @@
 .gantt-bar.is-editable { cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
 .gantt-bar.is-editable:active { cursor: grabbing; }
 .gantt-bar.is-point { height: 18px; top: 17px; border-radius: 4px; transform: rotate(45deg); }
+/* The bar and its title move together: the offset is a CSS variable set by the pointer. */
+.gantt-bar:not(.is-point) { overflow: visible; transform: translateX(var(--gantt-dx, 0px)); cursor: pointer; }
+.gantt-bar.is-editable:not(.is-point) { cursor: grab; }
+.gantt-bar-title { position: absolute; inset: 0 10px; display: flex; align-items: center; overflow: hidden; color: #fff; font-size: .72rem; font-weight: 600; line-height: 1; white-space: nowrap; text-overflow: ellipsis; pointer-events: none; }
+.gantt-bar.is-done .gantt-bar-title { color: #1f2f4a; }
+.gantt-bar.is-dragging { z-index: 3; }
+.gantt-bar.is-settling { transition: left 220ms cubic-bezier(.2, .8, .2, 1), width 220ms cubic-bezier(.2, .8, .2, 1), transform 220ms cubic-bezier(.2, .8, .2, 1), box-shadow 160ms; }
+.gantt-preview { transform: translateX(var(--gantt-dx, 0px)); }
+.gantt-bar.is-point { cursor: pointer; transform: translateX(var(--gantt-dx, 0px)) rotate(45deg); }
+.gantt-bar.is-point.is-editable { cursor: grab; }
 .gantt-bar.is-done { background: #9fb4d6; border-color: #7b93bb; }
 .gantt-bar.is-overdue { background: #f08a9b; border-color: #be123c; }
 .gantt-bar.is-dragging { box-shadow: 0 0 0 3px #245ce340, 0 8px 18px #142e5733; }
@@ -341,7 +359,84 @@
 .hero-workspace h2 { font-size: clamp(1.65rem, 2.4vw, 2rem); line-height: 1.2; font-weight: 600; letter-spacing: -0.035em; margin-top: 1.5rem; }
 .workspace-description { color: #cfdeff; font-size: 0.875rem; margin-top: 0.7rem; }
 .workspace-features { display: grid; gap: 0.6rem; margin-top: 1.5rem; }
-.workspace-features > div { display: flex; align-items: center; gap: 0.9rem; border-radius: 0.875rem; padding: 0.875rem; background: #ffffff0e; border: 1px solid #ffffff24; }
+.workspace-feature { display: flex; width: 100%; align-items: center; gap: 0.9rem; border-radius: 0.875rem; padding: 0.875rem; background: #ffffff0e; border: 1px solid #ffffff24; color: inherit; text-align: left; cursor: pointer; transition: background-color 180ms, border-color 180ms, transform 180ms, box-shadow 180ms; }
+.workspace-feature:focus-visible { outline: 3px solid #ffffff; outline-offset: 2px; background: #ffffff1f; }
+.workspace-feature:active { transform: scale(.985); background: #ffffff26; }
+.workspace-feature[aria-busy="true"] { cursor: progress; }
+.workspace-feature-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.workspace-feature-text > span { font-size: 0.8125rem; color: #cfdeff; margin-top: 0.1rem; }
+.workspace-feature-arrow { flex-shrink: 0; opacity: .7; transition: transform 180ms, opacity 180ms; }
+.workspace-current { display: flex; align-items: center; justify-content: space-between; gap: .75rem; min-height: 1.5rem; margin-top: .9rem; color: #cfdeff; font-size: .8125rem; }
+.workspace-current strong { color: #fff; font-weight: 600; }
+.workspace-current-change { flex-shrink: 0; min-height: 2rem; padding: 0 .75rem; border-radius: .5rem; border: 1px solid #ffffff40; color: #fff; font-weight: 550; transition: background-color 160ms; }
+.workspace-current-change:hover { background: #ffffff1a; }
+.workspace-current-change:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.workspace-link:focus-visible { outline: 3px solid #fff; outline-offset: 4px; border-radius: .25rem; }
+.workspace-link svg { transition: transform 180ms; }
+.hero-workspace .workspace-features > .workspace-feature { animation: fade-up 260ms ease-out backwards; }
+.hero-workspace .workspace-features > .workspace-feature:nth-child(2) { animation-delay: 60ms; }
+.hero-workspace .workspace-features > .workspace-feature:nth-child(3) { animation-delay: 120ms; }
+
+/* Modal window (native <dialog>). */
+.app-modal { width: min(560px, calc(100vw - 2rem)); max-height: min(80dvh, 720px); margin: auto; padding: 0; border: 1px solid #dfe7f2; border-radius: 1rem; background: #fff; color: #14233d; box-shadow: 0 30px 70px -20px #142e5766; }
+.app-modal::backdrop { background: #0f1d3366; }
+.app-modal[open] { animation: pop-in 180ms ease-out; }
+.app-modal-body { padding: 1.25rem 1.25rem 1.4rem; }
+.app-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+/* The modal may sit inside the blue hero panel: its own text styles win over `.hero-workspace h2`. */
+.app-modal .app-modal-title { margin: 0; font-size: 1.15rem; font-weight: 650; line-height: 1.3; letter-spacing: normal; color: #14233d; }
+.app-modal-description { margin-top: .3rem; color: #5b6b82; font-size: .875rem; }
+.app-modal-close { display: grid; place-items: center; flex-shrink: 0; width: 2.75rem; height: 2.75rem; margin: -.5rem -.5rem 0 0; border-radius: .6rem; color: #5b6b82; transition: background-color 160ms, color 160ms; }
+.app-modal-close:hover { background: #eef4ff; color: #245ce3; }
+.app-modal-close:focus-visible { outline: 3px solid #5088f0; outline-offset: 1px; }
+.project-picker-list { display: grid; gap: .5rem; }
+.project-picker-item { color: #14233d; display: flex; width: 100%; align-items: center; justify-content: space-between; gap: .75rem; min-height: 3.25rem; padding: .7rem .9rem; border: 1px solid #dfe7f2; border-radius: .75rem; background: #fff; text-align: left; transition: border-color 160ms, background-color 160ms, transform 160ms; }
+.project-picker-item:hover { border-color: #8fb0f5; background: #f4f8ff; }
+.project-picker-item:active { transform: scale(.99); }
+.project-picker-item:focus-visible { outline: 3px solid #5088f0; outline-offset: 2px; }
+.project-picker-item[aria-pressed="true"] { border-color: #245ce3; background: #eef4ff; }
+.project-picker-title { display: block; font-weight: 600; overflow-wrap: anywhere; }
+.project-picker-meta { display: block; margin-top: .15rem; color: #5b6b82; font-size: .8rem; }
+.project-picker-state { display: grid; gap: 1rem; color: #394a64; font-size: .9rem; }
+.task-details-list { display: grid; gap: .55rem; font-size: .9rem; }
+.task-details-list > div { display: grid; grid-template-columns: 8.5rem minmax(0, 1fr); gap: .75rem; }
+.task-details-list dt { color: #5b6b82; }
+.task-details-list dd { font-weight: 550; overflow-wrap: anywhere; }
+.task-details-description { margin-top: 1rem; padding: .75rem .9rem; border-radius: .6rem; background: #f6f8fc; color: #394a64; font-size: .9rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.task-details-status { display: inline-flex; align-items: center; min-height: 1.6rem; padding: 0 .6rem; border-radius: 999px; border: 1px solid #dfe7f2; background: #f6f8fc; color: #394a64; font-size: .78rem; font-weight: 600; }
+.task-details-status.is-doing { background: #fff7e6; border-color: #f5d48a; color: #8a5a00; }
+.task-details-status.is-done { background: #ecfdf3; border-color: #a6e3bf; color: #116b3a; }
+.task-details-status.is-todo { background: #eef4ff; border-color: #bcd0fa; color: #1e4fc2; }
+.task-details-status.is-overdue { background: #fff1f2; border-color: #fecdd3; color: #be123c; }
+@media (max-width: 480px) { .task-details-list > div { grid-template-columns: 1fr; gap: .1rem; } }
+
+/* Calendar day: number button opens a details panel. */
+.calendar-day { position: relative; min-width: 0; transition: border-color 160ms, box-shadow 160ms; }
+.calendar-day.is-open { border-color: #8fb0f5 !important; box-shadow: 0 0 0 3px #245ce31f; }
+.calendar-day-trigger { display: inline-flex; align-items: center; gap: .3rem; min-height: 1.75rem; min-width: 1.75rem; margin: -.25rem 0 .25rem -.25rem; padding: 0 .35rem; border-radius: .45rem; transition: background-color 160ms, color 160ms; }
+.calendar-day-trigger:hover, .calendar-day.is-open .calendar-day-trigger { background: #eef4ff; color: #245ce3; }
+.calendar-day-trigger:focus-visible { outline: 3px solid #5088f0; outline-offset: 1px; }
+.calendar-day-count { display: inline-grid; place-items: center; min-width: 1.1rem; height: 1.1rem; padding: 0 .25rem; border-radius: 999px; background: #dbe7ff; color: #1e4fc2; font-size: .65rem; font-weight: 700; }
+@media (pointer: coarse) { .calendar-day-trigger { min-height: 2.5rem; min-width: 2.5rem; } }
+.calendar-popover { position: fixed; z-index: 70; max-height: min(70dvh, 460px); overflow: auto; overscroll-behavior: contain; border: 1px solid #c9d8f2; border-radius: .9rem; background: #fff; color: #14233d; box-shadow: 0 24px 50px -18px #142e5766, 0 2px 6px #142e571a; animation: pop-in 160ms ease-out; }
+.calendar-popover-head { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .55rem .5rem .55rem .9rem; border-bottom: 1px solid #e5ecf7; background: #fff; font-size: .85rem; }
+.calendar-popover-head strong::first-letter { text-transform: uppercase; }
+.calendar-popover-close { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: .5rem; color: #5b6b82; }
+.calendar-popover-close:hover { background: #eef4ff; color: #245ce3; }
+.calendar-popover-close:focus-visible { outline: 3px solid #5088f0; outline-offset: 1px; }
+.calendar-popover-list { display: grid; gap: .5rem; padding: .7rem; }
+.calendar-popover-item { border: 1px solid #e5ecf7; border-left-width: 4px; border-radius: .6rem; padding: .55rem .7rem; font-size: .8rem; }
+.calendar-popover-item.is-task-start { border-left-color: #5088f0; }
+.calendar-popover-item.is-task-due { border-left-color: #e0a526; }
+.calendar-popover-item.is-event { border-left-color: #9b6bdf; }
+.calendar-popover-item.is-project-deadline { border-left-color: #1f9d63; }
+.calendar-popover-item.is-overdue { border-left-color: #be123c; }
+.calendar-popover-meta { display: flex; justify-content: space-between; gap: .5rem; color: #5b6b82; font-weight: 550; }
+.calendar-popover-title { margin-top: .15rem; font-size: .875rem; font-weight: 650; overflow-wrap: anywhere; }
+.calendar-popover-line { margin-top: .15rem; color: #394a64; overflow-wrap: anywhere; }
+.calendar-popover-action { display: inline-flex; align-items: center; min-height: 2rem; margin-top: .3rem; color: #245ce3; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.calendar-popover-action:focus-visible { outline: 3px solid #5088f0; outline-offset: 2px; border-radius: .25rem; }
+.timeline-item:target { border-color: #5088f0 !important; box-shadow: 0 0 0 3px #245ce32e; }
 .workspace-feature-icon { display: grid; place-items: center; flex-shrink: 0; width: 39px; height: 39px; border-radius: 0.625rem; background: #ffffff17; }
 .workspace-features strong { font-size: 0.875rem; font-weight: 550; }
 .workspace-features p { font-size: 0.8125rem; color: #cfdeff; margin-top: 0.1rem; }
@@ -492,6 +587,12 @@
 .tool-card:focus-visible, .entry-point:focus-visible { outline: 3px solid #5088f0; outline-offset: 2px; }
 .listing-card:has(:focus-visible), .expert-card:has(:focus-visible) { border-color: #8fb0f5; }
 @media (hover: hover) {
+  .workspace-feature:hover { background: #ffffff1f; border-color: #ffffff4d; transform: translateY(-2px); box-shadow: 0 12px 24px -16px #0b1f5299; }
+  .workspace-feature:hover .workspace-feature-arrow { transform: translateX(3px); opacity: 1; }
+  .workspace-link:hover svg { transform: translate(2px, -2px); }
+  /* The card comes slightly closer: lift and a deeper shadow, without changing its size. */
+  .task-board:not(.is-dragging) .task-card:not(.is-dragging):not(.is-editing):not(.is-saving):hover { transform: translateY(-3px); box-shadow: 0 14px 28px -16px #142e5759, 0 2px 6px #142e5714; border-color: #c9d8f2; }
+  .gantt-bar:not(.is-point):not(.is-dragging):hover { box-shadow: 0 4px 12px #245ce340; }
   .tool-card:hover, .listing-card:hover, .expert-card:hover { transform: translateY(-2px); }
   .entry-point:hover .entry-arrow, .tool-card:hover .tool-arrow { transform: translate(2px, -2px); }
 }
@@ -500,6 +601,12 @@
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
+  /* No movement or scaling; feedback stays through colour, border and shadow. */
+  .workspace-feature:hover, .workspace-feature:active, .project-picker-item:active,
+  .task-board .task-card:hover, .action-primary:active, .action-secondary:active, .header-login:active,
+  .tool-card:active, .entry-point:active, .icon-button:active, .nav-link:active { transform: none !important; }
+  .workspace-feature:hover .workspace-feature-arrow, .workspace-link:hover svg { transform: none; }
+  .task-drag-ghost { transform: translate3d(var(--drag-x, 0px), var(--drag-y, 0px), 0) !important; }
   .tool-card:hover, .listing-card:hover, .expert-card:hover, .entry-point:hover .entry-arrow, .tool-card:hover .tool-arrow { transform: none; }
 }
 

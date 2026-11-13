@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { getAppErrorMessage, logAppError } from '@/lib/appFeedback'
+import { signInHref } from '@/lib/safeRedirect'
 
 type Listing = {
   id: string
@@ -268,7 +269,7 @@ export default function DashboardPage() {
     if (!currentUser) {
       setLoading(false)
       setRefreshing(false)
-      router.replace('/auth')
+      router.replace(signInHref('/dashboard'))
       return
     }
 

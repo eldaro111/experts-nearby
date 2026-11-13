@@ -12,7 +12,8 @@ const testEnv = {
   NEXT_PUBLIC_SITE_URL: 'http://127.0.0.1:3001',
 }
 // Build with explicit fake public credentials; no live Supabase is contacted.
-await new Promise((resolve, reject) => {
+// PILOT_UI_SKIP_BUILD=1 reuses an existing .next build made with the same fake settings.
+if (process.env.PILOT_UI_SKIP_BUILD !== '1') await new Promise((resolve, reject) => {
   const build = spawn(
     process.execPath,
     ['node_modules/next/dist/bin/next', 'build'],

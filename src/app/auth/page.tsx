@@ -5,6 +5,7 @@ import { UiText, useT } from '@/components/LocaleProvider'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { safeInternalPath } from '@/lib/safeRedirect'
 import { UsersRound, ListChecks, FolderLock, ArrowRight, Mail } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PasswordInput } from '@/components/PasswordInput'
@@ -126,7 +127,9 @@ export default function AuthPage() {
       return
     }
 
-    router.replace(profile ? '/profile' : '/onboarding')
+    // `/auth?next=/path` returns to the action that asked for sign-in; only same-site paths pass.
+    const next = safeInternalPath(new URLSearchParams(window.location.search).get('next'))
+    router.replace(profile ? next || '/profile' : '/onboarding')
     router.refresh()
   }
 

@@ -2,7 +2,7 @@
 
 import { UiText } from '@/components/LocaleProvider'
 
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { GripVertical } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { createNotification } from '@/lib/notifications'
@@ -61,7 +61,16 @@ export function ProjectTasks({
   // A keyboard move re-renders the card in another column; this keeps focus on its handle.
   const refocusGripRef = useRef<string | null>(null)
   const [boardAnnouncement, setBoardAnnouncement] = useState('')
-  const [drag, setDrag] = useState<{ taskId: string; title: string; from: string; over: TaskStatus | null; x: number; y: number } | null>(null)
+  // React state holds only what changes the layout (which column is the target). The copy of the card
+  // that follows the pointer is moved directly in the DOM, so pointer moves do not re-render the board.
+  const [drag, setDrag] = useState<{ taskId: string; title: string; from: string; over: TaskStatus | null; height: number } | null>(null)
+  const dragRef = useRef<{
+    taskId: string; title: string; from: string; over: TaskStatus | null
+    ghost: HTMLElement; offsetX: number; offsetY: number; width: number; height: number
+    x: number; y: number; frame: number
+  } | null>(null)
+  // FLIP: where the card was on screen before it is rendered in another place.
+  const flipRef = useRef<{ taskId: string; rect: { left: number; top: number } } | null>(null)
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -75,12 +84,70 @@ export function ProjectTasks({
   // Unknown statuses are shown in a separate section instead of being hidden.
   const otherStatusTasks = tasks.filter((t) => !isBoardStatus(effectiveStatus(t)))
 
+  const cardElement = (taskId: string) => document.querySelector<HTMLElement>(`[data-task-card="${CSS.escape(taskId)}"]`)
+
+  // Remembers the card's place so the next render can animate it to the new one.
+  const rememberCardPlace = (taskId: string) => {
+    const rect = cardElement(taskId)?.getBoundingClientRect()
+    if (rect) flipRef.current = { taskId, rect: { left: rect.left, top: rect.top } }
+  }
+
+  // Smooth placement after a drop, a keyboard move, a cancel or a server refusal.
+  useLayoutEffect(() => {
+    const flip = flipRef.current
+    if (!flip) return
+    flipRef.current = null
+    const card = cardElement(flip.taskId)
+    if (!card || typeof card.animate !== 'function') return
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const rect = card.getBoundingClientRect()
+    const dx = flip.rect.left - rect.left
+    const dy = flip.rect.top - rect.top
+    if (Math.abs(dx) < 2 && Math.abs(dy) < 2) return
+    card.classList.add('is-settling')
+    const animation = card.animate(
+      [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'translate(0, 0)' }],
+      { duration: 220, easing: 'cubic-bezier(.2, .8, .2, 1)' },
+    )
+    const done = () => card.classList.remove('is-settling')
+    animation.onfinish = done
+    animation.oncancel = done
+  })
+
+  const finishDrag = () => {
+    const active = dragRef.current
+    if (!active) return null
+    dragRef.current = null
+    cancelAnimationFrame(active.frame)
+    active.ghost.remove()
+    document.body.classList.remove('is-task-dragging')
+    setDrag(null)
+    // The card continues from where the copy was released.
+    flipRef.current = { taskId: active.taskId, rect: { left: active.x - active.offsetX, top: active.y - active.offsetY } }
+    return active
+  }
+
+  const cancelDrag = () => {
+    const active = finishDrag()
+    if (active) setBoardAnnouncement(`Перемещение задачи «${active.title}» отменено.`)
+  }
+
   useEffect(() => {
     if (!drag) return
-    const cancel = (event: KeyboardEvent) => { if (event.key === 'Escape') setDrag(null) }
+    const cancel = (event: KeyboardEvent) => { if (event.key === 'Escape') cancelDrag() }
     document.addEventListener('keydown', cancel)
     return () => document.removeEventListener('keydown', cancel)
-  }, [drag])
+  })
+
+  // The copy must not outlive the board (navigation during a drag).
+  useEffect(() => () => {
+    const active = dragRef.current
+    if (!active) return
+    cancelAnimationFrame(active.frame)
+    active.ghost.remove()
+    document.body.classList.remove('is-task-dragging')
+    dragRef.current = null
+  }, [])
 
   const getMemberName = (userId: string | null) => {
     if (!userId) return 'Не назначен'
@@ -325,6 +392,8 @@ export function ProjectTasks({
     const from = effectiveStatus(task)
     if (from === status) return
 
+    // A drop has already stored the release point; buttons and the keyboard start from the card itself.
+    if (flipRef.current?.taskId !== taskId) rememberCardPlace(taskId)
     setMovingTaskIds((ids) => [...ids, taskId])
     setStatusOverrides((current) => ({ ...current, [taskId]: status }))
     const clearOverride = () => setStatusOverrides((current) => {
@@ -336,6 +405,8 @@ export function ProjectTasks({
     const result = await saveTaskStatus(task, status)
 
     if (!result.ok) {
+      // The card visibly returns to its previous column.
+      rememberCardPlace(taskId)
       clearOverride()
       setMovingTaskIds((ids) => ids.filter((id) => id !== taskId))
       logAppError('Ошибка обновления статуса задачи:', result.message)
@@ -388,28 +459,80 @@ export function ProjectTasks({
     return isBoardStatus(status) ? status : null
   }
 
+  const placeGhost = (active: NonNullable<typeof dragRef.current>) => {
+    active.ghost.style.setProperty('--drag-x', `${active.x - active.offsetX}px`)
+    active.ghost.style.setProperty('--drag-y', `${active.y - active.offsetY}px`)
+  }
+
+  const updateDropTarget = (active: NonNullable<typeof dragRef.current>) => {
+    const over = dropTargetAt(active.x, active.y)
+    if (over === active.over) return
+    active.over = over
+    setDrag((current) => (current ? { ...current, over } : current))
+  }
+
   const handleGripPointerDown = (event: ReactPointerEvent<HTMLButtonElement>, task: Task) => {
-    if (event.button !== 0 || movingTaskIds.includes(task.id)) return
+    if (event.button !== 0 || movingTaskIds.includes(task.id) || dragRef.current) return
+    const card = event.currentTarget.closest<HTMLElement>('[data-task-card]')
+    if (!card) return
     // Stop text selection / native drag, which would otherwise cancel the pointer stream.
     event.preventDefault()
     event.currentTarget.setPointerCapture(event.pointerId)
-    setDrag({ taskId: task.id, title: task.title, from: effectiveStatus(task), over: null, x: event.clientX, y: event.clientY })
+
+    // A visual copy of the whole card (title, assignee, dates, buttons) with the same size.
+    const rect = card.getBoundingClientRect()
+    const ghost = card.cloneNode(true) as HTMLElement
+    ghost.classList.remove('is-saving', 'is-revealed', 'is-settling')
+    ghost.classList.add('task-drag-ghost')
+    ghost.removeAttribute('data-task-card')
+    ghost.setAttribute('aria-hidden', 'true')
+    ghost.inert = true
+    ghost.querySelectorAll('[id], [data-task-grip]').forEach((node) => { node.removeAttribute('id'); node.removeAttribute('data-task-grip') })
+    const sourceSelects = card.querySelectorAll('select')
+    ghost.querySelectorAll('select').forEach((select, index) => { select.value = sourceSelects[index]?.value ?? '' })
+    ghost.style.width = `${rect.width}px`
+    ghost.style.height = `${rect.height}px`
+
+    const active = {
+      taskId: task.id, title: task.title, from: effectiveStatus(task), over: null as TaskStatus | null,
+      ghost, offsetX: event.clientX - rect.left, offsetY: event.clientY - rect.top, width: rect.width, height: rect.height,
+      x: event.clientX, y: event.clientY, frame: 0,
+    }
+    placeGhost(active)
+    document.body.appendChild(ghost)
+    document.body.classList.add('is-task-dragging')
+
+    // Edge scrolling keeps working while the pointer rests near the top or bottom of the window.
+    const tick = () => {
+      if (dragRef.current !== active) return
+      const edge = 72
+      if (active.y < edge) window.scrollBy(0, -12)
+      else if (active.y > window.innerHeight - edge) window.scrollBy(0, 12)
+      updateDropTarget(active)
+      active.frame = requestAnimationFrame(tick)
+    }
+    dragRef.current = active
+    active.frame = requestAnimationFrame(tick)
+    setDrag({ taskId: task.id, title: task.title, from: active.from, over: null, height: rect.height })
   }
 
   const handleGripPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (!drag) return
-    // Keep scrolling possible on narrow screens where columns are stacked.
-    if (event.clientY < 72) window.scrollBy(0, -14)
-    else if (event.clientY > window.innerHeight - 72) window.scrollBy(0, 14)
-    setDrag({ ...drag, x: event.clientX, y: event.clientY, over: dropTargetAt(event.clientX, event.clientY) })
+    const active = dragRef.current
+    if (!active) return
+    active.x = event.clientX
+    active.y = event.clientY
+    placeGhost(active)
+    updateDropTarget(active)
   }
 
   const handleGripPointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (!drag) return
+    const active = dragRef.current
+    if (!active) return
+    active.x = event.clientX
+    active.y = event.clientY
     const target = dropTargetAt(event.clientX, event.clientY)
-    const { taskId, from } = drag
-    setDrag(null)
-    if (target && target !== from) void handleChangeTaskStatus(taskId, target)
+    finishDrag()
+    if (target && target !== active.from) void handleChangeTaskStatus(active.taskId, target)
   }
 
   useEffect(() => {
@@ -714,25 +837,39 @@ export function ProjectTasks({
     columnTasks: Task[],
     status: string,
     droppable = true
-  ) => (
+  ) => {
+    const isTarget = Boolean(drag && droppable && drag.over === status && drag.from !== status)
+    // The order inside a column is the board's own (newest first), not the drop point, so the
+    // placeholder is shown exactly where the card will appear after saving.
+    const shownTasks = isTarget && drag
+      ? tasks.filter((task) => task.id === drag.taskId || columnTasks.includes(task))
+      : columnTasks
+    return (
     <section
-      className={`task-column border rounded-xl bg-white p-5 shadow-sm ${drag && droppable && drag.over === status && drag.from !== status ? 'is-drop-target' : ''}`}
+      className={`task-column border rounded-xl bg-white p-5 shadow-sm ${isTarget ? 'is-drop-target' : ''}`}
       data-drop-status={droppable ? status : undefined}
       aria-label={`${title}: ${columnTasks.length}`}
     >
       <h2 className="text-xl font-semibold mb-4 flex items-baseline justify-between gap-2"><span>{title}</span><span className="text-sm font-normal text-gray-500">{columnTasks.length}</span></h2>
 
-      {columnTasks.length === 0 ? (
+      {shownTasks.length === 0 ? (
         <p className="text-sm text-gray-500">{droppable ? 'Пока пусто. Перетащите сюда задачу.' : 'Пока пусто.'}</p>
       ) : (
         <div className="space-y-3">
-          {columnTasks.map((task) => {
+          {shownTasks.map((task) => {
+            if (isTarget && drag && task.id === drag.taskId) {
+              return (
+                <div key="drop-placeholder" className="task-drop-placeholder" style={{ height: drag.height }} aria-hidden="true">
+                  Задача будет здесь
+                </div>
+              )
+            }
             const isEditing = editingTaskId === task.id
             const isMoving = movingTaskIds.includes(task.id)
             const currentStatus = effectiveStatus(task)
 
             return (
-              <div key={task.id} className={`task-card border rounded-lg p-3 bg-gray-50 ${isMoving ? 'is-saving' : ''} ${drag?.taskId === task.id ? 'is-dragging' : ''}`} aria-busy={isMoving || undefined}>
+              <div key={task.id} data-task-card={task.id} className={`task-card border rounded-lg p-3 bg-gray-50 ${isMoving ? 'is-saving' : ''} ${isEditing ? 'is-editing' : ''} ${drag?.taskId === task.id ? 'is-dragging' : ''}`} aria-busy={isMoving || undefined}>
                 {isEditing ? (
                   <div className="space-y-2">
                     <input
@@ -820,7 +957,7 @@ export function ProjectTasks({
                         onPointerDown={(event) => handleGripPointerDown(event, task)}
                         onPointerMove={handleGripPointerMove}
                         onPointerUp={handleGripPointerUp}
-                        onPointerCancel={() => setDrag(null)}
+                        onPointerCancel={cancelDrag}
                         onKeyDown={(event) => handleGripKeyDown(event, task)}
                       >
                         <GripVertical size={16} aria-hidden="true" />
@@ -987,7 +1124,8 @@ export function ProjectTasks({
         </div>
       )}
     </section>
-  )
+    )
+  }
 
   return (
     <>
@@ -1084,9 +1222,9 @@ export function ProjectTasks({
       ) : (
         <>
           <p id="task-board-drag-hint" className="text-sm text-gray-500 mb-3">
-            Перетащите задачу за значок слева от названия в другую колонку. С клавиатуры: фокус на значке и стрелки влево/вправо. Кнопки статуса в карточке тоже работают.
+            Перетащите задачу за значок слева от названия в другую колонку — за указателем движется вся карточка. С клавиатуры: фокус на значке и стрелки влево/вправо, Escape отменяет перенос. Кнопки статуса в карточке тоже работают.
           </p>
-          <div className="grid gap-6 md:grid-cols-3">
+          <div className={`task-board grid gap-6 md:grid-cols-3 ${drag ? 'is-dragging' : ''}`}>
             {BOARD_COLUMNS.map((column) => (
               <div key={column.status}>{renderTaskColumn(column.label, tasks.filter((t) => effectiveStatus(t) === column.status), column.status)}</div>
             ))}
@@ -1095,11 +1233,6 @@ export function ProjectTasks({
             <div className="mt-6">
               {renderTaskColumn('Другие статусы', otherStatusTasks, 'other', false)}
               <p className="text-xs text-gray-500 mt-2">У этих задач статус, которого нет на доске. Он сохранён без изменений; перенесите задачу в колонку, если нужно.</p>
-            </div>
-          )}
-          {drag && (
-            <div className="task-drag-ghost" style={{ left: drag.x, top: drag.y }} aria-hidden="true">
-              {drag.title}
             </div>
           )}
         </>
