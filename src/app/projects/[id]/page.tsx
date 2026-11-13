@@ -369,6 +369,7 @@ export default function ProjectWorkspacePage() {
               members={members}
               tasks={tasks}
               projectProgress={projectProgress}
+              onTasksChanged={refreshTasks}
             />
           </section>
 

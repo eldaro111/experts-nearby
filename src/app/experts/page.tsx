@@ -1,5 +1,6 @@
 'use client'
 
+import { AdSlot } from '@/components/AdSlot'
 import { UiText } from '@/components/LocaleProvider'
 
 import Link from 'next/link'
@@ -299,6 +300,7 @@ export default function ExpertsPage() {
         </div>
         {priceSort && !priceUnitFilter && <p className="text-xs text-slate-500 mt-3">Для сравнения сопоставимых цен выберите «За проект» или «За консультацию». Цены по договорённости идут в конце.</p>}
       </section>
+      <AdSlot id="experts-after-filters" />
       <div className="results-bar"><p aria-live="polite">{loadError ? 'Каталог недоступен' : <><UiText text={"Найдено специалистов:"}/><strong className="text-slate-900">{filteredExperts.length}</strong></>}</p><button onClick={resetFilters} disabled={!hasFilters} className="text-blue-700 disabled:text-gray-400 disabled:opacity-60 min-h-11"><UiText text={"Сбросить фильтры"}/></button></div>
       {user && ownedProjects.length === 0 && <Link href="/listings/new" className="mb-5 flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-5 py-4 text-sm text-blue-800">Создайте проект, чтобы приглашать экспертов<ArrowUpRight size={17} /></Link>}
       {loadError ? <EmptyState title="Не удалось загрузить экспертов" description="Проверьте подключение и попробуйте ещё раз."><Button className="action-primary" onClick={() => setLoadAttempt((value) => value + 1)}>Повторить загрузку</Button></EmptyState> : filteredExperts.length === 0 ? <EmptyState title={hasFilters ? 'Подходящих специалистов пока нет' : 'Профили специалистов появятся здесь'} description={hasFilters ? 'Попробуйте изменить запрос или убрать часть фильтров.' : 'Заполните свой профиль, чтобы другие участники могли найти вас.'}>{hasFilters && <Button variant="outline" onClick={resetFilters}><UiText text={"Сбросить фильтры"}/></Button>}</EmptyState> : (

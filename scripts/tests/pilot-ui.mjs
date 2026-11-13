@@ -216,6 +216,8 @@ async function context(signed = false, width = 1440) {
       { id, claims },
     )
   }
+  // Close every WebSocket (Supabase Realtime) without connecting anywhere.
+  await c.routeWebSocket(/.*/, (ws) => ws.close())
   await c.route('**/*', (route) => {
     const u = new URL(route.request().url())
     return ['127.0.0.1', 'pilot-test.supabase.co'].includes(u.hostname)
@@ -433,9 +435,9 @@ try {
   await form
     .getByLabel('Учебная группа', { exact: true })
     .selectOption('group1')
-  await form
-    .getByLabel('Часовой пояс', { exact: true })
-    .selectOption('Asia/Krasnoyarsk')
+  // ER-002: searchable combobox instead of a native select.
+  await form.getByRole('combobox', { name: 'Часовой пояс', exact: true }).fill('Красноярск')
+  await form.getByRole('option', { name: /Красноярск/ }).first().click()
   await form
     .getByLabel('Условия работы', { exact: true })
     .selectOption('project')
@@ -454,6 +456,7 @@ try {
     assert.equal(savedProfile.study_group_id, 'group1')
     assert.equal(savedProfile.price_unit, 'project')
     assert.equal(savedProfile.price_from, 15000)
+    assert.equal(savedProfile.timezone, 'Asia/Krasnoyarsk')
     assert.ok(!('hourly_rate' in savedProfile))
   })
   await form.goto(base + '/recommendations')

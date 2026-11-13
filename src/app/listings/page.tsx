@@ -2,7 +2,7 @@
 
 import { UiText } from '@/components/LocaleProvider'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Clock3, MessageSquare, Plus, SlidersHorizontal, ArrowUpRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,9 @@ import { PageHeader } from '@/components/PageHeader'
 import { PageLoading, EmptyState } from '@/components/PageState'
 import { supabase } from '@/lib/supabaseClient'
 import { logAppError, showAppError, showAppMessage } from '@/lib/appFeedback'
+import { TimezoneSelect } from '@/components/TimezoneSelect'
+import { AdSlot } from '@/components/AdSlot'
+import { formatTimezone, parseTimezone, sameTimezone } from '@/lib/timezones'
 
 interface Listing {
   id: string
@@ -18,7 +21,7 @@ interface Listing {
   description: string
   roles_needed: string[] | string
   skills: string[] | string
-  timezone: string
+  timezone: string | null
   created_at: string
   applications_count?: number
 }
@@ -52,7 +55,6 @@ export default function ListingsPage() {
   const debouncedSearch = useDebounce(searchFilter)
   const debouncedRole = useDebounce(roleFilter)
   const debouncedSkill = useDebounce(skillFilter)
-  const debouncedTz = useDebounce(tzFilter)
 
   useEffect(() => {
     let active = true
@@ -104,7 +106,6 @@ export default function ListingsPage() {
     const searchQuery = debouncedSearch.trim().toLowerCase()
     const roleQuery = debouncedRole.trim().toLowerCase()
     const skillQuery = debouncedSkill.trim().toLowerCase()
-    const tzQuery = debouncedTz.trim().toLowerCase()
 
     if (searchQuery) {
       result = result.filter(
@@ -128,16 +129,14 @@ export default function ListingsPage() {
       })
     }
 
-    if (tzQuery) {
-      result = result.filter(
-        (l) =>
-          typeof l.timezone === 'string' &&
-          l.timezone.toLowerCase().includes(tzQuery)
-      )
+    // ER-002: exact IANA comparison after alias canonicalization; legacy values match only
+    // the same legacy value; projects without a time zone never match a selected zone.
+    if (tzFilter) {
+      result = result.filter((l) => sameTimezone(l.timezone, tzFilter))
     }
 
     setFiltered(result)
-  }, [debouncedSearch, debouncedRole, debouncedSkill, debouncedTz, listings])
+  }, [debouncedSearch, debouncedRole, debouncedSkill, tzFilter, listings])
 
  const handleApply = async (item: Listing) => {
   if (applyingListingId) return
@@ -244,6 +243,10 @@ export default function ListingsPage() {
     setSearchFilter(''); setRoleFilter(''); setSkillFilter(''); setTzFilter('')
   }
   const hasFilters = Boolean(searchFilter || roleFilter || skillFilter || tzFilter)
+  const legacyZones = useMemo(
+    () => [...new Set(listings.map((item) => item.timezone || '').filter((zone) => parseTimezone(zone).kind === 'legacy'))],
+    [listings],
+  )
   const tags = (value: string[] | string) => Array.isArray(value) ? value : (value || '').split(',').map((item) => item.trim()).filter(Boolean)
 
   if (loading) return <PageLoading label="Загружаем проекты…" />
@@ -259,9 +262,10 @@ export default function ListingsPage() {
           <div><label htmlFor="project-query" className="filter-label">Название или описание</label><Input id="project-query" type="search" placeholder="Что вам интересно?" value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)} /></div>
           <div><label htmlFor="project-role" className="filter-label">Ваша роль</label><Input id="project-role" placeholder="Например, инженер" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} /></div>
           <div><label htmlFor="project-skill" className="filter-label">Навык</label><Input id="project-skill" placeholder="Например, CAD" value={skillFilter} onChange={(e) => setSkillFilter(e.target.value)} /></div>
-          <div><label htmlFor="project-timezone" className="filter-label"><UiText text={"Часовой пояс"}/></label><Input id="project-timezone" placeholder="Например, UTC+3" value={tzFilter} onChange={(e) => setTzFilter(e.target.value)} /></div>
+          <div><label htmlFor="project-timezone" className="filter-label"><UiText text={"Часовой пояс проекта"}/></label><TimezoneSelect id="project-timezone" value={tzFilter} onChange={setTzFilter} emptyLabel="Любой часовой пояс" extraValues={legacyZones} describedBy="project-timezone-hint" /><p id="project-timezone-hint" className="mt-1.5 text-xs text-slate-500"><UiText text={tzFilter ? "Показаны проекты с этим часовым поясом. Проекты без указанного пояса скрыты." : "Поиск по городу, стране, IANA или смещению, например UTC+7."}/></p></div>
         </div>
       </section>
+      <AdSlot id="listings-after-filters" />
       <div className="results-bar"><p aria-live="polite">{loadError ? 'Проекты недоступны' : <><UiText text={"Найдено проектов:"}/><strong className="text-slate-900">{filtered.length}</strong></>}</p><button onClick={resetFilters} disabled={!hasFilters} className="text-blue-700 disabled:text-gray-400 disabled:opacity-60 min-h-11"><UiText text={"Сбросить фильтры"}/></button></div>
       {loadError ? <EmptyState title="Не удалось загрузить проекты" description="Проверьте подключение и попробуйте ещё раз."><Button onClick={() => setLoadAttempt((value) => value + 1)} className="action-primary">Повторить загрузку</Button></EmptyState> : filtered.length === 0 ? <EmptyState title={hasFilters ? 'По этим параметрам проектов нет' : 'Новые проекты появятся здесь'} description={hasFilters ? 'Измените запрос или уберите часть фильтров.' : 'Создайте проект и пригласите специалистов к совместной работе.'}>{hasFilters ? <Button variant="outline" onClick={resetFilters}><UiText text={"Сбросить фильтры"}/></Button> : <Link href="/listings/new" className="text-link">Создать первый проект<Plus size={17} /></Link>}</EmptyState> : (
         <div className="grid gap-5 md:grid-cols-2">
@@ -272,7 +276,7 @@ export default function ListingsPage() {
               <p className="text-gray-600 leading-7 mb-5 line-clamp-3">{item.description}</p>
               <div className="mb-4"><p className="text-sm font-medium text-gray-700 mb-2">Нужны в команду</p><div className="flex flex-wrap gap-2">{tags(item.roles_needed).length ? tags(item.roles_needed).map((role, index) => <span className="skill-tag bg-blue-50 text-blue-700" key={`${role}-${index}`}>{role}</span>) : <span className="text-sm text-gray-500">Роли уточняются</span>}</div></div>
               {tags(item.skills).length > 0 && <div className="flex flex-wrap gap-2 mb-5">{tags(item.skills).slice(0, 8).map((skill, index) => <span key={`${skill}-${index}`} className="skill-tag">{skill}</span>)}{tags(item.skills).length > 8 && <span className="skill-tag">+{tags(item.skills).length - 8}</span>}</div>}
-              <div className="card-meta border-t pt-4"><span><MessageSquare size={15} />Отклики: {item.applications_count || 0}</span><span><Clock3 size={15} />{item.timezone || 'Часовой пояс не указан'}</span></div>
+              <div className="card-meta border-t pt-4"><span><MessageSquare size={15} />Отклики: {item.applications_count || 0}</span><span><Clock3 size={15} />{formatTimezone(item.timezone) || 'Часовой пояс не указан'}</span></div>
               <div className="card-actions">
                 <Button onClick={() => handleApply(item)} disabled={applyingListingId !== null || appliedListingIds.includes(item.id)} className="min-h-11 rounded-lg">{applyingListingId === item.id ? 'Отправляем…' : appliedListingIds.includes(item.id) ? 'Отклик отправлен' : 'Откликнуться'}</Button>
                 <Button asChild variant="outline" className="min-h-11 rounded-lg"><Link href={`/listings/${item.id}`}>О проекте<ArrowUpRight size={16} /></Link></Button>

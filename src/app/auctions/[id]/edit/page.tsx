@@ -11,6 +11,7 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { logAppError, showAppError, showAppMessage } from '@/lib/appFeedback'
+import { marketStatusLabel, marketTypeLabel } from '@/lib/marketLabels'
 import type { Auction, AuctionProtected } from '@/components/auction/types'
 
 const splitList = (value: string) =>
@@ -56,10 +57,6 @@ const stringifyProtectedLinks = (links: any[] | null | undefined) => {
     })
     .filter(Boolean)
     .join('\n')
-}
-
-const auctionTypeLabel = (type: Auction['type']) => {
-  return type === 'offer' ? 'Проект для внедрения' : 'Заказ на разработку'
 }
 
 interface MyListingOption {
@@ -158,7 +155,7 @@ export default function EditAuctionPage() {
       .maybeSingle()
 
     if (auctionError || !auctionData) {
-      logAppError('Ошибка загрузки аукциона:', auctionError)
+      logAppError('Ошибка загрузки объявления:', auctionError)
       setAuction(null)
       setLoading(false)
       return
@@ -220,7 +217,7 @@ export default function EditAuctionPage() {
 
     if (!canEdit) {
       showAppMessage(
-        'Редактировать можно только свой открытый аукцион или черновик.',
+        'Редактировать можно только своё открытое объявление или черновик.',
         'warning'
       )
       return
@@ -228,7 +225,7 @@ export default function EditAuctionPage() {
 
     const cleanTitle = title.trim()
     if (!cleanTitle) {
-      showAppMessage('Введите название аукциона.', 'warning')
+      showAppMessage('Введите название объявления.', 'warning')
       return
     }
 
@@ -279,8 +276,8 @@ export default function EditAuctionPage() {
       if (auctionError) {
         showAppError(
           auctionError,
-          'Не удалось сохранить аукцион.',
-          'Сохранение аукциона'
+          'Не удалось сохранить объявление.',
+          'Сохранение объявления'
         )
         return
       }
@@ -318,10 +315,10 @@ export default function EditAuctionPage() {
         }
       }
 
-      showAppMessage('Аукцион сохранён.', 'success')
+      showAppMessage('Объявление сохранено.', 'success')
       router.replace(`/auctions/${auction.id}`)
     } catch (error) {
-      showAppError(error, 'Не удалось сохранить аукцион.', 'Сохранение аукциона')
+      showAppError(error, 'Не удалось сохранить объявление.', 'Сохранение объявления')
     } finally {
       setSaving(false)
     }
@@ -332,9 +329,9 @@ export default function EditAuctionPage() {
   if (!auction) {
     return (
       <div className="page-shell form-shell text-center">
-        <h1 className="text-2xl font-bold mb-3">Аукцион не найден</h1>
+        <h1 className="text-2xl font-bold mb-3">Объявление не найдено</h1>
         <Link href="/auctions" className="text-blue-600 hover:underline">
-          Вернуться к аукционам
+          Вернуться к объявлениям
         </Link>
       </div>
     )
@@ -344,9 +341,9 @@ export default function EditAuctionPage() {
     return (
       <div className="page-shell form-shell text-center">
         <h1 className="text-2xl font-bold mb-3">Нет доступа к редактированию</h1>
-        <p className="text-gray-600 mb-5">Редактировать аукцион может только его владелец.</p>
+        <p className="text-gray-600 mb-5">Редактировать объявление может только его владелец.</p>
         <Link href={`/auctions/${auction.id}`} className="text-blue-600 hover:underline">
-          Вернуться к аукциону
+          Вернуться к объявлению
         </Link>
       </div>
     )
@@ -357,24 +354,24 @@ export default function EditAuctionPage() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <Link href={`/auctions/${auction.id}`} className="text-sm text-blue-600 hover:underline">
-            ← К аукциону
+            ← К объявлению
           </Link>
-          <h1 className="text-3xl font-bold mt-2">Редактировать аукцион</h1>
+          <h1 className="text-3xl font-bold mt-2">Редактировать объявление</h1>
           <p className="text-gray-600 mt-1">
-            Тип: <b>{auctionTypeLabel(auction.type)}</b>. Тип аукциона после создания не меняем,
-            чтобы не ломать ставки и доступы.
+            Тип: <b>{marketTypeLabel(auction.type)}</b>. Тип объявления после создания изменить нельзя:
+            от него зависят уже отправленные предложения и доступы.
           </p>
         </div>
 
         <span className="text-sm px-3 py-1 rounded-full bg-gray-50 border text-gray-700">
-          Статус: {auction.status}
+          Статус: {marketStatusLabel(auction.status)}
         </span>
       </div>
 
       {!canEdit && (
         <div className="border rounded-xl bg-orange-50 text-orange-800 p-5 mb-6">
-          Этот аукцион уже нельзя редактировать. Редактирование разрешено только для статусов
-          <b> open</b> и <b>draft</b>.
+          Это объявление уже нельзя редактировать. Редактировать можно только открытое объявление
+          или черновик.
         </div>
       )}
 
@@ -382,7 +379,7 @@ export default function EditAuctionPage() {
         <div className="border rounded-xl bg-white p-5 shadow-sm space-y-4">
           <h2 className="text-xl font-semibold">Публичная часть</h2>
 
-          <FormField label="Название аукциона"><input
+          <FormField label="Название объявления"><input
             type="text"
             placeholder="Название"
             value={title}
@@ -500,7 +497,7 @@ export default function EditAuctionPage() {
           </div>
         ) : (
           <div className="border rounded-xl bg-white p-5 shadow-sm space-y-4">
-            <h2 className="text-xl font-semibold">Проект для внедрения</h2>
+            <h2 className="text-xl font-semibold">Готовый проект</h2>
 
             <div className="grid md:grid-cols-2 gap-3">
               <FormField label="Тип сделки"><input
@@ -573,9 +570,9 @@ export default function EditAuctionPage() {
             </label>
 
             <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
-              <h3 className="font-semibold">Закрытая часть offer-аукциона</h3>
+              <h3 className="font-semibold">Закрытая часть объявления о готовом проекте</h3>
               <p className="text-sm text-gray-600">
-                Эти данные обновляются отдельно в auction_protected и не попадают в публичную часть.
+                Закрытые материалы хранятся отдельно от публичной части. Их увидите вы и пользователи, которым вы одобрите запрос доступа.
               </p>
 
               <FormField label="Закрытое описание"><textarea

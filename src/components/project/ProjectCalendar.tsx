@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { logAppError, showAppMessage } from '@/lib/appFeedback'
 
 import type { Listing, ProjectEvent, ProjectMember, Task } from './types'
+import { ProjectGantt } from './ProjectGantt'
 
 const initialNow = Date.now()
 const CLOCK_REFRESH_INTERVAL_MS = 60_000
@@ -29,6 +30,8 @@ interface ProjectCalendarProps {
   members: ProjectMember[]
   tasks: Task[]
   projectProgress: number
+  /** Reloads tasks after a date change so board, Gantt and calendar stay consistent. */
+  onTasksChanged?: () => Promise<void>
 }
 
 export function ProjectCalendar({
@@ -38,6 +41,7 @@ export function ProjectCalendar({
   members,
   tasks,
   projectProgress,
+  onTasksChanged,
 }: ProjectCalendarProps) {
   const [events, setEvents] = useState<ProjectEvent[]>([])
   const [eventsLoading, setEventsLoading] = useState(false)
@@ -251,17 +255,6 @@ export function ProjectCalendar({
           },
         ]
       : []),
-    ...tasks
-      .filter((task) => task.start_at || task.due_at)
-      .map((task) => ({
-        id: `task-${task.id}`,
-        kind: 'task',
-        title: task.title,
-        subtitle: `Задача · ${getMemberName(task.assignee_id)}`,
-        starts_at: task.start_at || task.due_at,
-        ends_at: task.due_at || task.start_at,
-        isOverdue: isTaskOverdue(task),
-      })),
     ...events.map((event) => ({
       id: `event-${event.id}`,
       kind: event.event_type,
@@ -627,13 +620,26 @@ export function ProjectCalendar({
         </div>
       </div>
 
+      <div className="border rounded-lg bg-white p-4 mb-6">
+        <ProjectGantt
+          projectId={projectId}
+          currentUserId={currentUserId}
+          tasks={tasks}
+          members={members}
+          readOnly={Boolean(listing.completed_at)}
+          projectDeadline={listing.deadline_at}
+          onTasksChanged={onTasksChanged}
+        />
+      </div>
+
+      <h3 className="font-semibold mb-3">События и дедлайн проекта</h3>
       {eventsLoading ? (
         <div className="text-sm text-gray-500">
-          Загружаем календарный план...
+          Загружаем события...
         </div>
       ) : timelineItems.length === 0 ? (
         <div className="text-sm text-gray-500">
-          Пока нет задач или событий со сроками.
+          Пока нет событий и дедлайна проекта.
         </div>
       ) : (
         <div className="space-y-3">
@@ -685,14 +691,6 @@ export function ProjectCalendar({
                 )}
               </div>
 
-              <div className="mt-3 h-2 rounded-full bg-white border overflow-hidden">
-                <div
-                  className={`h-full ${
-                    item.isOverdue ? 'bg-red-500' : 'bg-blue-500'
-                  }`}
-                  style={{ width: item.kind === 'task' ? '75%' : '35%' }}
-                />
-              </div>
             </div>
           ))}
         </div>

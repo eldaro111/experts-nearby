@@ -123,7 +123,7 @@ export default function NewListingPage() {
           <div><label className="filter-label" htmlFor="listing-roles">Роли в команде</label><Input id="listing-roles" placeholder="Конструктор, технический переводчик, технический писатель" value={roles} onChange={(e) => setRoles(e.target.value)} aria-describedby="roles-hint" /><p id="roles-hint" className="text-xs text-gray-500 mt-2">Перечислите через запятую.</p></div>
           <div><label className="filter-label" htmlFor="listing-skills">Нужные навыки</label><Input id="listing-skills" placeholder="CAD, Python, электроника" value={skills} onChange={(e) => setSkills(e.target.value)} aria-describedby="skills-hint" /><p id="skills-hint" className="text-xs text-gray-500 mt-2">Перечислите через запятую.</p></div>
         </div></div>
-        <div><label className="filter-label" htmlFor="listing-timezone"><UiText text={"Часовой пояс"}/></label><TimezoneSelect id="listing-timezone" value={timezone} onChange={setTimezone} /></div>
+        <div><label className="filter-label" htmlFor="listing-timezone"><UiText text={"Часовой пояс"}/></label><TimezoneSelect id="listing-timezone" value={timezone} onChange={setTimezone} suggestDevice /></div>
         <section className="border-t pt-6"><h2 className="text-lg font-semibold mb-4">Проект вуза (необязательно)</h2><UniversityFields value={university} onChange={setUniversity} allowCreate /></section>
         <div className="border-t pt-6 flex flex-wrap justify-between items-center gap-4"><p className="text-sm text-gray-500">* Обязательные поля</p><Button type="submit" disabled={loading} className="action-primary">{loading ? 'Публикуем…' : 'Опубликовать проект'}<ArrowRight size={18} /></Button></div>
       </form>

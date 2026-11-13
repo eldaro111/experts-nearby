@@ -22,32 +22,7 @@ export const SPECIALIZATIONS = [
   'Технический переводчик',
   'Технический писатель',
 ]
-export const TIMEZONES = [
-  ['Europe/Kaliningrad', 'UTC+2 · Калининград'],
-  ['Europe/Moscow', 'UTC+3 · Москва, Санкт-Петербург'],
-  ['Europe/Samara', 'UTC+4 · Самара'],
-  ['Asia/Yekaterinburg', 'UTC+5 · Екатеринбург'],
-  ['Asia/Omsk', 'UTC+6 · Омск'],
-  ['Asia/Novosibirsk', 'UTC+7 · Новосибирск'],
-  ['Asia/Tomsk', 'UTC+7 · Томск'],
-  ['Asia/Krasnoyarsk', 'UTC+7 · Красноярск'],
-  ['Asia/Irkutsk', 'UTC+8 · Иркутск'],
-  ['Asia/Yakutsk', 'UTC+9 · Якутск'],
-  ['Asia/Vladivostok', 'UTC+10 · Владивосток'],
-  ['Asia/Magadan', 'UTC+11 · Магадан'],
-  ['Asia/Kamchatka', 'UTC+12 · Камчатка'],
-  ['UTC', 'UTC · Всемирное время'],
-  ['Europe/London', 'Лондон'],
-  ['Europe/Berlin', 'Берлин'],
-  ['Europe/Lisbon', 'Лиссабон'],
-  ['Asia/Almaty', 'Алматы'],
-  ['Asia/Tashkent', 'Ташкент'],
-  ['Asia/Dubai', 'Дубай'],
-  ['Asia/Shanghai', 'Пекин'],
-  ['Asia/Tokyo', 'Токио'],
-  ['America/New_York', 'Нью-Йорк'],
-  ['America/Los_Angeles', 'Лос-Анджелес'],
-] as const
+// Time zones: see src/lib/timezones.ts (ER-002). Offsets are computed per date, not stored in labels.
 export type PriceUnit = 'negotiable' | 'project' | 'consultation'
 export type LanguageSkill = {
   language: string

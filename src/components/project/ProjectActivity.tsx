@@ -31,7 +31,7 @@ interface ActorProfile {
 const activityTypeLabel = (type: string) => {
   const map: Record<string, string> = {
     project_member_added: 'Участник',
-    project_member_added_via_auction: 'Аукцион',
+    project_member_added_via_auction: 'Объявление',
     task_created: 'Задача',
     task_completed: 'Задача',
     task_status_changed: 'Задача',
@@ -152,7 +152,7 @@ export function ProjectActivity({ projectId }: ProjectActivityProps) {
         </div>
       ) : items.length === 0 ? (
         <div className="border rounded-lg bg-gray-50 p-5 text-sm text-gray-500">
-          История пока пустая. Новые задачи, файлы, вклад и события аукциона будут появляться здесь.
+          История пока пустая. Новые задачи, файлы, вклад и события рынка проектов будут появляться здесь.
         </div>
       ) : (
         <div className="space-y-3">

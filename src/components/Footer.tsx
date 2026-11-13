@@ -2,6 +2,12 @@ import Link from 'next/link'
 import { LanguageSwitcher, UiText } from '@/components/LocaleProvider'
 import { LEGAL_TITLES, siteConfig } from '@/lib/siteConfig'
 import { safeWebUrl } from '@/lib/profileOptions'
+
+// ER-001: only the footer link is hidden. The «ethics» document, its LEGAL_TITLES entry,
+// the /legal/ethics route and the editor option stay unchanged.
+const FOOTER_HIDDEN_LEGAL = new Set(['ethics'])
+const footerLegalLinks = Object.entries(LEGAL_TITLES).filter(([slug]) => !FOOTER_HIDDEN_LEGAL.has(slug))
+
 export function Footer() {
   return (
     <footer className="site-footer">
@@ -16,14 +22,16 @@ export function Footer() {
             </p>
           </div>
           <nav aria-label="Навигация в подвале">
-            <Link href="/startups">Стартапам</Link>
-            <Link href="/help">Инструкции</Link>
+            {/* ER-001: help moved here from the header; /news is reachable from the header as «Новости». */}
+            <Link href="/help">
+              <UiText text="Помощь" />
+            </Link>
             <Link href="/help/faq">FAQ</Link>
+            <Link href="/startups">
+              <UiText text="Стартапам" />
+            </Link>
             <Link href="/universities">
               <UiText text="ВУЗам" />
-            </Link>
-            <Link href="/news">
-              <UiText text="События и новости" />
             </Link>
             <Link href="/experts">
               <UiText text="Эксперты" />
@@ -31,7 +39,7 @@ export function Footer() {
           </nav>
         </div>
         <nav className="legal-links" aria-label="Юридические документы">
-          {Object.entries(LEGAL_TITLES).map(([slug, title]) => (
+          {footerLegalLinks.map(([slug, title]) => (
             <Link key={slug} href={`/legal/${slug}`}>
               <UiText text={title} />
             </Link>

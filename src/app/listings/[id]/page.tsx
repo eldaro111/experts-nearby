@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { logAppError, showAppError, showAppMessage } from '@/lib/appFeedback'
+import { formatTimezone } from '@/lib/timezones'
 import { createNotification } from '@/lib/notifications'
 
 interface Listing extends Partial<StartupFieldsValue> {
@@ -695,7 +696,7 @@ const handleLeaveProject = async () => {
       </div>
 
       <div className="text-sm text-gray-600 mb-2">
-        <b>Часовой пояс:</b> {listing.timezone || '—'}
+        <b>Часовой пояс:</b> {formatTimezone(listing.timezone) || '—'}
       </div>
 
       <div className="text-xs text-gray-400 mb-6">

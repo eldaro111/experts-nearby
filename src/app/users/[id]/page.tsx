@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { logAppError, showAppError, showAppMessage } from '@/lib/appFeedback'
+import { formatTimezone } from '@/lib/timezones'
 import { createNotification } from '@/lib/notifications'
 import { ProfileReviews } from '@/components/profile/ProfileReviews'
 
@@ -169,7 +170,7 @@ export default function UserProfilePage() {
       <div className="mb-6"><Link href="/experts" className="text-sm text-blue-600 hover:underline">← Назад к экспертам</Link></div>
       <div className="bg-white shadow-sm border rounded-xl p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between mb-6">
-          <div><p className="eyebrow mb-3">Эксперт платформы · {profile.expert_code}</p><h1 className="text-3xl font-bold">{profile.display_name || 'Без имени'}</h1><p className="text-gray-600 mt-2">{profile.city || 'Город не указан'} · {profile.work_format ? workFormatLabel[profile.work_format] : 'формат не указан'} · {experienceLabel[profile.experience_years || profile.experience_level || 'unspecified']}</p><p className="text-gray-500 text-sm mt-1">{profile.timezone || 'Часовой пояс не указан'} · {profile.availability_hours == null ? 'Доступность не указана' : `${profile.availability_hours} ч/нед`} · {priceLabel(profile)}</p></div>
+          <div><p className="eyebrow mb-3">Эксперт платформы · {profile.expert_code}</p><h1 className="text-3xl font-bold">{profile.display_name || 'Без имени'}</h1><p className="text-gray-600 mt-2">{profile.city || 'Город не указан'} · {profile.work_format ? workFormatLabel[profile.work_format] : 'формат не указан'} · {experienceLabel[profile.experience_years || profile.experience_level || 'unspecified']}</p><p className="text-gray-500 text-sm mt-1">{formatTimezone(profile.timezone) || 'Часовой пояс не указан'} · {profile.availability_hours == null ? 'Доступность не указана' : `${profile.availability_hours} ч/нед`} · {priceLabel(profile)}</p></div>
           {currentUser ? ownedProjects.length > 0 ? <div className="border rounded-lg p-3 bg-gray-50 w-full md:w-80"><div className="text-sm font-medium mb-2">Пригласить в проект</div><div className="flex flex-col gap-2"><select aria-label="Проект для приглашения" value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} className="border rounded-lg px-3 py-2 text-sm bg-white"><option value="">Выбрать проект...</option>{ownedProjects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select><button onClick={handleInvite} disabled={inviting} className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-60">{inviting ? 'Приглашаем...' : 'Пригласить'}</button></div></div> : <Link href="/listings/new" className="text-sm text-blue-600 hover:underline">Создать проект, чтобы пригласить эксперта</Link> : <Link href="/auth" className="text-sm text-blue-600 hover:underline">Войдите, чтобы пригласить эксперта</Link>}
         </div>
         {profile.about && <div className="mb-6"><h2 className="font-semibold mb-2"><UiText text={"О себе"}/></h2><p className="text-gray-700 whitespace-pre-line">{profile.about}</p></div>}
