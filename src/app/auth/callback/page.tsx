@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { nextStepAfterSignIn, safeReturnPath, takePendingReturn } from '@/lib/authReturn'
+import { resolveAccessibleDestination } from '@/lib/projectAccess'
 
 function getHashParams() {
   const hash =
@@ -47,6 +49,11 @@ export default function AuthCallbackPage() {
         url.searchParams.get('type') ||
         hashParams.get('type') ||
         ''
+
+      // Destination chosen before sign-in: the link's `next`, else the copy kept in this browser.
+      // The kept copy is removed either way, so it cannot be reused by a later sign-in.
+      const pending = takePendingReturn()
+      const destination = safeReturnPath(url.searchParams.get('next')) ?? pending
 
       const code = url.searchParams.get('code')
       const accessToken = hashParams.get('access_token')
@@ -125,7 +132,8 @@ export default function AuthCallbackPage() {
           document.cookie =
             'needs_pw_reset=1; Path=/; Max-Age=1800; SameSite=Lax'
 
-          const nextPath = profile ? '/profile' : '/onboarding'
+          // The new password comes first; set-password then opens onboarding or the destination.
+          const nextPath = nextStepAfterSignIn(Boolean(profile), destination)
 
           router.replace(
             `/auth/set-password?next=${encodeURIComponent(nextPath)}`
@@ -139,16 +147,16 @@ export default function AuthCallbackPage() {
               'needs_pw_setup=1; Path=/; Max-Age=1800; SameSite=Lax'
 
             router.replace(
-              '/auth/set-password?next=%2Fonboarding'
+              `/auth/set-password?next=${encodeURIComponent(nextStepAfterSignIn(false, destination))}`
             )
             return
           }
 
-          router.replace('/onboarding')
+          router.replace(nextStepAfterSignIn(false, destination))
           return
         }
 
-        router.replace('/profile')
+        router.replace(destination ? await resolveAccessibleDestination(destination, user.id) : '/profile')
       } catch (callbackError: unknown) {
         if (cancelled) return
 

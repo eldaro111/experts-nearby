@@ -5,6 +5,9 @@ import { supabase } from '@/lib/supabaseClient'
 import { PageHeader } from '@/components/PageHeader'
 import { PageLoading } from '@/components/PageState'
 import { ProfileEditor } from '@/components/profile/ProfileEditor'
+import { returnPathFromLocation } from '@/lib/authReturn'
+import { resolveAccessibleDestination } from '@/lib/projectAccess'
+import { signInHref } from '@/lib/safeRedirect'
 export default function OnboardingPage() {
   const router = useRouter()
   const [userId, setUserId] = useState('')
@@ -20,7 +23,9 @@ export default function OnboardingPage() {
           error: issue,
         } = await supabase.auth.getUser()
         if (!user) {
-          router.replace('/auth')
+          // A destination chosen before sign-in survives a lost session.
+          const next = returnPathFromLocation()
+          router.replace(next ? signInHref(next) : '/auth')
           return
         }
         if (issue) throw issue
@@ -65,7 +70,11 @@ export default function OnboardingPage() {
         <ProfileEditor
           userId={userId}
           initial={profile || {}}
-          onSaved={() => router.replace('/profile')}
+          onSaved={async () => {
+            // `?next=` — the section chosen before sign-in; onboarding itself is never a destination.
+            const next = returnPathFromLocation()
+            router.replace(next ? await resolveAccessibleDestination(next, userId) : '/profile')
+          }}
         />
       </section>
     </div>
