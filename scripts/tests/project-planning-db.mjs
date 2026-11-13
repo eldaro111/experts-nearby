@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
-import {setup,owner,member,stranger,checks,fails,readMigration,planningMigration} from './planning-db-helpers.mjs'
+import {setup,owner,member,stranger,checks,fails,readMigration,planningMigration,sprintMigration} from './planning-db-helpers.mjs'
 const {check,finish}=checks()
 const h=await setup([])
 const {db,q,user,admin,project,task,settings,configure,stages,stage,edit,history}=h
 try {
  const legacyProject=await project(), legacy=await task(legacyProject,{status:'review'})
  const legacyHistory=await history(legacyProject)
- await admin();await db.exec(readMigration(planningMigration));await user(owner)
+ await admin();await db.exec(readMigration(planningMigration))
+ if(process.argv.includes('--sprints')) await db.exec(readMigration(sprintMigration))
+ await user(owner)
  await check('migration preserves legacy task fields/history and implicit simple defaults',async()=>{
   const row=(await q('select * from tasks where id=$1',[legacy.id]))[0]
   for(const [key,val] of Object.entries(legacy)) assert.deepEqual(row[key],val,key)

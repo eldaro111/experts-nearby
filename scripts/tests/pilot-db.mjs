@@ -26,6 +26,7 @@ try {
       '20261112090000_task_schedule.sql',
       '20261112091000_market_system_text.sql',
       '20261114090000_project_planning.sql',
+      ...(process.argv.includes('--sprints') ? ['20261114100000_project_sprints.sql'] : []),
     ] : []),
   ]) {
     let sql = readFileSync(`${root}/supabase/migrations/${filename}`, 'utf8')
