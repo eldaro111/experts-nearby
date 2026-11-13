@@ -5,6 +5,7 @@ import { UiText } from '@/components/LocaleProvider'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { logAppError } from '@/lib/appFeedback'
+import { activityBody } from '@/lib/taskLabels'
 
 interface ProjectActivityProps {
   projectId: string
@@ -35,6 +36,7 @@ const activityTypeLabel = (type: string) => {
     task_created: 'Задача',
     task_completed: 'Задача',
     task_status_changed: 'Задача',
+    task_schedule_changed: 'Сроки задачи',
     task_assignee_changed: 'Задача',
     task_deleted: 'Задача',
     file_uploaded: 'Файл',
@@ -172,8 +174,8 @@ export function ProjectActivity({ projectId }: ProjectActivityProps) {
 
               <div className="font-medium text-gray-900">{item.title}</div>
 
-              {item.body && (
-                <div className="text-sm text-gray-600 mt-1">{item.body}</div>
+              {activityBody(item) && (
+                <div className="text-sm text-gray-600 mt-1">{activityBody(item)}</div>
               )}
 
               <div className="text-xs text-gray-400 mt-2">

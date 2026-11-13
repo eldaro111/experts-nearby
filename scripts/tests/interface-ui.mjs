@@ -85,6 +85,7 @@ const dismissToasts = async (page) => {
   for (const button of await page.locator('.app-toast button').all()) await button.click().catch(() => null)
 }
 const tasksPatches = (backend, id) => backend.log.filter((entry) => entry.method === 'PATCH' && entry.path.endsWith('/tasks') && entry.query.includes(`id=eq.${id}`))
+const scheduleCalls = (backend,id) => backend.log.filter(e => e.method === 'POST' && e.path.endsWith('/reschedule_task_secure') && JSON.parse(e.body).p_task_id === id)
 const taskRow = (backend, id) => backend.tables.tasks.find((row) => row.id === id)
 
 async function dragMouse(page, from, to, steps = 8) {
@@ -427,9 +428,9 @@ try {
       await preview.waitFor()
       const expectedStart = await page.evaluate((iso) => new Date(iso).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), at(3, '09:30'))
       assert.ok((await preview.innerText()).includes(expectedStart), await preview.innerText())
-      assert.equal(tasksPatches(backend, 'G1').length, 0, 'nothing is saved before release')
+      assert.equal(scheduleCalls(backend, 'G1').length, 0, 'nothing is saved before release')
       await settle(page); await page.screenshot({ path: `${out}/gantt-drag-preview-1440.png` })
-      const saved = page.waitForResponse((r) => r.url().includes('/rest/v1/tasks') && r.request().method() === 'PATCH')
+      const saved = page.waitForResponse((r) => r.url().includes('/rest/v1/rpc/reschedule_task_secure') && r.request().method() === 'POST')
       await page.mouse.up()
       await saved
       await page.waitForFunction(() => !document.querySelector('.gantt-bar.is-saving'))
@@ -437,8 +438,8 @@ try {
       assert.equal(new Date(row.start_at).toISOString(), at(3, '09:30'))
       assert.equal(new Date(row.due_at).toISOString(), at(5, '18:00'))
       assert.equal(new Date(row.due_at) - new Date(row.start_at), new Date(original.due_at) - new Date(original.start_at))
-      const patch = tasksPatches(backend, 'G1').at(-1)
-      assert.ok(patch.query.includes(`start_at=eq.`) && patch.query.includes(`due_at=eq.`), 'conditional update on previous dates')
+      const patch = scheduleCalls(backend, 'G1').at(-1)
+      assert.equal(JSON.parse(patch.body).p_expected_start_at, original.start_at); assert.equal(JSON.parse(patch.body).p_expected_due_at, original.due_at)
     })
     await check('gantt: the board card shows the same saved deadline', async () => {
       const due = taskRow(backend, 'G1').due_at
@@ -451,7 +452,7 @@ try {
       const box = await boxOf(bar('Расчёт привода'))
       const from = { x: box.x + 2, y: box.y + box.height / 2 }
       await dragMouse(page, from, { x: from.x - 80, y: from.y })
-      const saved = page.waitForResponse((r) => r.url().includes('/rest/v1/tasks') && r.request().method() === 'PATCH')
+      const saved = page.waitForResponse((r) => r.url().includes('/rest/v1/rpc/reschedule_task_secure') && r.request().method() === 'POST')
       await page.mouse.up()
       await saved
       await page.waitForFunction(() => !document.querySelector('.gantt-bar.is-saving'))
@@ -463,7 +464,7 @@ try {
       const box = await boxOf(bar('Расчёт привода'))
       const from = { x: box.x + box.width - 2, y: box.y + box.height / 2 }
       await dragMouse(page, from, { x: from.x - 400, y: from.y })
-      const saved = page.waitForResponse((r) => r.url().includes('/rest/v1/tasks') && r.request().method() === 'PATCH')
+      const saved = page.waitForResponse((r) => r.url().includes('/rest/v1/rpc/reschedule_task_secure') && r.request().method() === 'POST')
       await page.mouse.up()
       await saved
       await page.waitForFunction(() => !document.querySelector('.gantt-bar.is-saving'))
@@ -473,7 +474,7 @@ try {
     await check('gantt: server error restores the previous dates and shows the reason', async () => {
       const before = { ...taskRow(backend, 'G1') }
       const left = (await boxOf(bar('Расчёт привода'))).x
-      backend.failures.push({ method: 'PATCH', table: 'tasks', status: 400, message: 'Проект завершён: изменения запрещены.' })
+      backend.failures.push({ method: 'POST', table: 'reschedule_task_secure', status: 400, message: 'Проект завершён: изменения запрещены.' })
       const from = await center(bar('Расчёт привода'))
       await dragMouse(page, from, { x: from.x + 120, y: from.y })
       await page.mouse.up()
@@ -497,12 +498,12 @@ try {
     await check('gantt: keyboard ArrowRight moves by one day', async () => {
       const before = taskRow(backend, 'G1').start_at
       await bar('Расчёт привода').focus()
-      const count = tasksPatches(backend, 'G1').length
-      const saved = page.waitForResponse((r) => r.url().includes('/rest/v1/tasks') && r.request().method() === 'PATCH')
+      const count = scheduleCalls(backend, 'G1').length
+      const saved = page.waitForResponse((r) => r.url().includes('/rest/v1/rpc/reschedule_task_secure') && r.request().method() === 'POST')
       await page.keyboard.press('ArrowRight')
       await saved
       await page.waitForFunction(() => !document.querySelector('.gantt-bar.is-saving'))
-      assert.equal(tasksPatches(backend, 'G1').length, count + 1)
+      assert.equal(scheduleCalls(backend, 'G1').length, count + 1)
       assert.equal(new Date(taskRow(backend, 'G1').start_at).getTime() - new Date(before).getTime(), DAY)
     })
     await check('gantt: single-date task is a marker; missing dates are offered, not invented', async () => {
@@ -515,7 +516,7 @@ try {
       const item = page.locator('.gantt li', { hasText: 'Закупка деталей' })
       await item.getByRole('button', { name: 'Назначить сроки' }).click()
       await item.getByLabel('Начало').fill(`${tomskDate(4)}T10:00`)
-      const saved = page.waitForResponse((r) => r.url().includes('/rest/v1/tasks') && r.request().method() === 'PATCH')
+      const saved = page.waitForResponse((r) => r.url().includes('/rest/v1/rpc/reschedule_task_secure') && r.request().method() === 'POST')
       await item.getByRole('button', { name: 'Сохранить' }).click()
       await saved
       await page.waitForFunction(() => !document.querySelector('.gantt-bar.is-saving'))
@@ -535,6 +536,71 @@ try {
       await page.getByText('Дедлайн не может быть раньше начала.').first().waitFor()
       assert.equal(tasksPatches(backend, 'G2').length, count)
       await editing.getByRole('button', { name: 'Отмена' }).click()
+    })
+    await check('integration: regular edit preserves seconds and detects another editor without overwriting', async () => {
+      taskRow(backend, 'G2').due_at = at(6, '12:00').replace(':00.000Z', ':37.123Z')
+      await page.reload()
+      let card = page.locator('.task-card', { hasText: 'Закупка деталей' })
+      await card.getByRole('button', { name: 'Редактировать' }).click()
+      let editing = page.locator('.task-card:has(input[type="datetime-local"])')
+      const before = taskRow(backend, 'G2').due_at
+      let saved = page.waitForResponse(r => r.url().includes('/rest/v1/tasks') && r.request().method() === 'PATCH')
+      await editing.getByRole('button', { name: 'Сохранить' }).click(); await saved
+      await card.getByRole('button', { name: 'Редактировать' }).waitFor()
+      assert.equal(taskRow(backend, 'G2').due_at, before)
+      await card.getByRole('button', { name: 'Редактировать' }).click()
+      editing = page.locator('.task-card:has(input[type="datetime-local"])')
+      // The second browser edits the same task while the first form is open.
+      const second = await context.newPage()
+      await second.goto(base + '/projects/P1')
+      await second.locator('.task-card', { hasText: 'Закупка деталей' }).getByRole('button', { name: 'Редактировать' }).click()
+      const otherForm = second.locator('.task-card:has(input[type="datetime-local"])')
+      await otherForm.locator('input[type="datetime-local"]').nth(1).fill(`${tomskDate(7)}T13:15`)
+      saved = second.waitForResponse(r => r.url().includes('/rest/v1/tasks') && r.request().method() === 'PATCH')
+      await otherForm.getByRole('button', { name: 'Сохранить' }).click(); await saved
+      const otherDue = taskRow(backend, 'G2').due_at
+      saved = page.waitForResponse(r => r.url().includes('/rest/v1/tasks') && r.request().method() === 'PATCH')
+      await editing.getByRole('button', { name: 'Сохранить' }).click(); await saved
+      await page.getByText('Задача уже изменена или доступ отозван.', { exact: false }).first().waitFor()
+      assert.equal(taskRow(backend, 'G2').due_at, otherDue)
+      await second.close()
+    })
+    await check('integration: calendar, task card and Gantt retain saved dates and status after reload', async () => {
+      const grip = page.getByRole('button', { name: 'Переместить задачу «Расчёт привода»' })
+      await grip.focus(); await page.keyboard.press('ArrowRight')
+      await page.waitForFunction(() => document.querySelector('section[data-drop-status="done"]')?.textContent?.includes('Расчёт привода') && !document.querySelector('.task-card.is-saving'))
+      await page.reload(); await page.locator('.gantt-bar').first().waitFor()
+      assert.ok((await bar('Расчёт привода').getAttribute('aria-label')).includes('Готово'))
+      const row = taskRow(backend, 'G1')
+      // The saved deadline may be in the following month when this test runs near month-end.
+      const monthOffset = await page.evaluate(iso => {
+        const date = new Date(iso), now = new Date()
+        return (date.getFullYear() - now.getFullYear()) * 12 + date.getMonth() - now.getMonth()
+      }, row.due_at)
+      for (let i = 0; i < Math.abs(monthOffset); i++) {
+        await page.getByRole('button', { name: monthOffset > 0 ? 'Следующий месяц' : 'Предыдущий месяц', exact: true }).click()
+      }
+      const expected = await page.evaluate(iso => new Date(iso).toLocaleString(), row.due_at)
+      assert.ok((await page.locator('section[data-drop-status="done"] .task-card', { hasText: 'Расчёт привода' }).innerText()).includes(expected))
+      const items = page.locator('.calendar-grid [title]').filter({ hasText: 'Расчёт привода' })
+      assert.ok(await items.count() >= 1)
+      assert.ok((await items.allTextContents()).every(t => t.includes('Готово')))
+      assert.ok((await items.evaluateAll(nodes => nodes.map(n => n.title))).some(t => t.includes(expected)))
+      assert.equal(await page.locator('.calendar-grid [title]').filter({ hasText: 'Испытания' }).count(), 0)
+    })
+    await check('integration: schedule permission failure restores dates; structured history shows Russian labels', async () => {
+      const before = taskRow(backend, 'G1').due_at
+      backend.failures.push({ method:'POST',table:'reschedule_task_secure',status:403,code:'42501',message:'Нет прав на изменение задачи.' })
+      await bar('Расчёт привода').focus(); await page.keyboard.press('ArrowRight')
+      await page.getByRole('alert').filter({hasText:'Нет прав'}).waitFor()
+      assert.equal(taskRow(backend,'G1').due_at,before)
+      backend.tables.project_activity = [
+        {id:'H1',project_id:'P1',actor_id:USER,type:'task_status_changed',title:'Статус изменён',body:'Статус: todo → doing.',metadata:{old_status:'todo',new_status:'doing'},created_at:at(0,'10:00')},
+        {id:'H2',project_id:'P1',actor_id:USER,type:'task_schedule_changed',title:'Сроки изменены',body:null,metadata:{old_start_at:null,new_start_at:at(1,'09:30'),old_due_at:null,new_due_at:before},created_at:at(0,'10:01')},
+      ]
+      await page.reload()
+      await page.getByText('Статус: Нужно сделать → В работе.',{exact:true}).waitFor()
+      await page.getByText('Начало: не задано →',{exact:false}).waitFor()
     })
     for (const width of [768, 360]) {
       await page.setViewportSize({ width, height: 900 })

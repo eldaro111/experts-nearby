@@ -5,22 +5,14 @@
 //   and must stay visible.
 // - Members update tasks directly (RLS «Project members can update tasks», guard triggers).
 // - Status changes are recorded by the trigger trusted_activity_from_task (author = auth.uid()).
-// - start_at / due_at changes are NOT recorded in project history (known F-02) and tasks have
-//   no version column; concurrent edits are detected below with a conditional update.
+// - Date changes are validated and recorded atomically by the task schedule migration.
 import { supabase } from '@/lib/supabaseClient'
 import type { Task, TaskStatus } from '@/components/project/types'
-
-export const BOARD_COLUMNS: ReadonlyArray<{ status: TaskStatus; label: string }> = [
-  { status: 'todo', label: 'Нужно сделать' },
-  { status: 'doing', label: 'В работе' },
-  { status: 'done', label: 'Готово' },
-]
+import { BOARD_COLUMNS } from './taskLabels'
+export { BOARD_COLUMNS, boardStatusLabel } from './taskLabels'
 
 export const isBoardStatus = (status: string): status is TaskStatus =>
   BOARD_COLUMNS.some((column) => column.status === status)
-
-export const boardStatusLabel = (status: string) =>
-  BOARD_COLUMNS.find((column) => column.status === status)?.label || status
 
 export type SavedTask = Pick<Task, 'id' | 'status' | 'start_at' | 'due_at' | 'completed_at'>
 
@@ -37,17 +29,12 @@ export async function saveTaskStatus(task: Pick<Task, 'id' | 'status'>, status: 
     .from('tasks')
     .update(patch)
     .eq('id', task.id)
+    .eq('status', task.status)
     .select('id, status, start_at, due_at, completed_at')
   if (error) return { ok: false, reason: 'error', message: `Не удалось изменить статус: ${readError(error)}` }
   const row = Array.isArray(data) ? data[0] : null
-  if (!row) return { ok: false, reason: 'forbidden', message: 'Статус не изменён: задача недоступна или у вас нет прав на её изменение.' }
+  if (!row) return { ok: false, reason: 'conflict', message: 'Статус не изменён: задача уже изменена или доступ отозван. Обновите данные.' }
   return { ok: true, task: row as SavedTask }
-}
-
-const sameMoment = (a: string | null | undefined, b: string | null | undefined) => {
-  if (!a && !b) return true
-  if (!a || !b) return false
-  return new Date(a).getTime() === new Date(b).getTime()
 }
 
 export function validateTaskRange(startAt: string | null, dueAt: string | null): string | null {
@@ -60,8 +47,7 @@ export function validateTaskRange(startAt: string | null, dueAt: string | null):
 }
 
 /**
- * Saves start/due only if they still equal the values the user saw (compare-and-swap in the WHERE
- * clause). If someone else changed them meanwhile, nothing is overwritten and «conflict» is returned.
+ * Server locks the task, checks membership and expected dates, then updates dates and history.
  */
 export async function saveTaskDates(
   task: Pick<Task, 'id' | 'start_at' | 'due_at'>,
@@ -71,28 +57,23 @@ export async function saveTaskDates(
   const invalid = validateTaskRange(startAt, dueAt)
   if (invalid) return { ok: false, reason: 'invalid', message: invalid }
 
-  let query = supabase.from('tasks').update({ start_at: startAt, due_at: dueAt }).eq('id', task.id)
-  query = task.start_at ? query.eq('start_at', task.start_at) : query.is('start_at', null)
-  query = task.due_at ? query.eq('due_at', task.due_at) : query.is('due_at', null)
-  const { data, error } = await query.select('id, status, start_at, due_at, completed_at')
-  if (error) return { ok: false, reason: 'error', message: `Сроки не сохранены: ${readError(error)}` }
-  const row = Array.isArray(data) ? data[0] : null
-  if (row) return { ok: true, task: row as SavedTask }
-
-  // Nothing updated: either the dates changed meanwhile or the row is not writable for this user.
-  const { data: fresh, error: readFailed } = await supabase
-    .from('tasks')
-    .select('id, start_at, due_at')
-    .eq('id', task.id)
-    .maybeSingle()
-  if (readFailed) return { ok: false, reason: 'error', message: `Сроки не сохранены: ${readError(readFailed)}` }
-  if (fresh && (!sameMoment(fresh.start_at, task.start_at) || !sameMoment(fresh.due_at, task.due_at))) {
-    return {
-      ok: false,
-      reason: 'conflict',
-      message: 'Сроки задачи уже изменил другой участник. Показаны актуальные даты — проверьте их и повторите изменение.',
-    }
+  const { data, error } = await supabase.rpc('reschedule_task_secure', {
+    p_task_id: task.id,
+    p_expected_start_at: task.start_at,
+    p_expected_due_at: task.due_at,
+    p_new_start_at: startAt,
+    p_new_due_at: dueAt,
+  })
+  if (error?.code === 'PT409') return {
+    ok: false, reason: 'conflict',
+    message: 'Сроки задачи уже изменил другой участник. Показаны актуальные даты — проверьте их и повторите изменение.',
   }
+  if (error) return {
+    ok: false, reason: error.code === '42501' ? 'forbidden' : 'error',
+    message: `Сроки не сохранены: ${readError(error)}`,
+  }
+  const row = Array.isArray(data) ? data[0] : data
+  if (row) return { ok: true, task: row as SavedTask }
   return { ok: false, reason: 'forbidden', message: 'Сроки не сохранены: задача недоступна или у вас нет прав на её изменение.' }
 }
 

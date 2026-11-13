@@ -6,6 +6,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 const root = fileURLToPath(new URL('../../', import.meta.url))
 const testEnv = {
   ...process.env,
+  NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --require="${root.replaceAll('\\', '/')}scripts/tests/no-env-files.js"`,
   NEXT_PUBLIC_SUPABASE_URL: 'https://pilot-test.supabase.co',
   NEXT_PUBLIC_SUPABASE_ANON_KEY: 'local-test-public-key',
   NEXT_PUBLIC_SITE_URL: 'http://127.0.0.1:3001',

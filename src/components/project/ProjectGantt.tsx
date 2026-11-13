@@ -3,14 +3,13 @@
 // Gantt view of project tasks (replaces the decorative bars of the former plan list).
 // Model facts: tasks.start_at / due_at are timestamptz (time of day is kept), shown in the device
 // time zone like the rest of the workspace. Dragging moves by whole local calendar days and keeps
-// the time of day. Saving uses the same tasks update as the regular form, guarded by a
-// compare-and-swap on the previous dates (src/lib/taskSchedule.ts). Date changes are not yet
-// written to project history on the server (known F-02).
+// the time of day. The schedule RPC checks previous dates and writes history atomically.
 import { useMemo, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { CalendarPlus } from 'lucide-react'
 import { createNotification } from '@/lib/notifications'
 import { logAppError, showAppMessage } from '@/lib/appFeedback'
 import { saveTaskDates, shiftLocalDays, validateTaskRange } from '@/lib/taskSchedule'
+import { boardStatusLabel } from '@/lib/taskLabels'
 import type { ProjectMember, Task } from './types'
 
 const DAY_WIDTH = 40
@@ -18,7 +17,7 @@ const LABEL_WIDTH = 190
 
 type Mode = 'move' | 'start' | 'end'
 type Draft = { start: string | null; due: string | null }
-type DragState = { taskId: string; mode: Mode; originX: number; days: number; frozen: number[] }
+type DragState = { taskId: string; snapshot: Task; mode: Mode; originX: number; days: number; frozen: number[] }
 
 const startOfLocalDay = (time: number) => {
   const date = new Date(time)
@@ -102,7 +101,7 @@ export function ProjectGantt({
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
   const [savingIds, setSavingIds] = useState<string[]>([])
   const [drag, setDrag] = useState<DragState | null>(null)
-  const [assigning, setAssigning] = useState<{ taskId: string; start: string; due: string } | null>(null)
+  const [assigning, setAssigning] = useState<{ taskId: string; snapshot: Task; start: string; due: string } | null>(null)
   const [announcement, setAnnouncement] = useState('')
   const [nowTime] = useState(() => Date.now())
 
@@ -177,21 +176,21 @@ export function ProjectGantt({
     // Stop text selection / native drag, which would otherwise cancel the pointer stream.
     event.preventDefault()
     event.currentTarget.setPointerCapture(event.pointerId)
-    setDrag({ taskId: task.id, mode, originX: event.clientX, days: 0, frozen: computedDays })
+    setDrag({ taskId: task.id, snapshot: { ...task }, mode, originX: event.clientX, days: 0, frozen: computedDays })
   }
   const onPointerMove = (event: PointerEvent<HTMLElement>, task: Task) => {
     if (!drag || drag.taskId !== task.id) return
     const daysMoved = Math.round((event.clientX - drag.originX) / DAY_WIDTH)
     if (daysMoved === drag.days) return
     setDrag({ ...drag, days: daysMoved })
-    setDrafts((d) => ({ ...d, [task.id]: applyDays(task, drag.mode, daysMoved) }))
+    setDrafts((d) => ({ ...d, [task.id]: applyDays(drag.snapshot, drag.mode, daysMoved) }))
   }
   const onPointerUp = (task: Task) => {
     if (!drag || drag.taskId !== task.id) return
-    const { mode, days: moved } = drag
+    const { mode, days: moved, snapshot } = drag
     setDrag(null)
     if (moved === 0) { setDrafts((d) => { const copy = { ...d }; delete copy[task.id]; return copy }); return }
-    void persist(task, applyDays(task, mode, moved))
+    void persist(snapshot, applyDays(snapshot, mode, moved))
   }
   const onPointerCancel = (task: Task) => {
     setDrag(null)
@@ -211,10 +210,9 @@ export function ProjectGantt({
 
   const saveAssigned = async () => {
     if (!assigning) return
-    const task = tasks.find((item) => item.id === assigning.taskId)
-    if (!task) return
-    const start = fromLocalInput(assigning.start)
-    const due = fromLocalInput(assigning.due)
+    const task = assigning.snapshot
+    const start = assigning.start === toLocalInput(task.start_at) ? task.start_at : fromLocalInput(assigning.start)
+    const due = assigning.due === toLocalInput(task.due_at) ? task.due_at : fromLocalInput(assigning.due)
     const invalid = validateTaskRange(start, due)
     if (invalid) { showAppMessage(invalid, 'warning'); return }
     if (!start && !due) { showAppMessage('Укажите хотя бы одну дату.', 'warning'); return }
@@ -273,17 +271,18 @@ export function ProjectGantt({
               const isSaving = savingIds.includes(task.id)
               const start = draft.start ? new Date(draft.start).getTime() : null
               const due = draft.due ? new Date(draft.due).getTime() : null
-              const single = !start || !due
+              const single = start === null || due === null
               const left = xOf((start ?? due) as number, days)
               const right = xOf((due ?? start) as number, days)
               const width = Math.max(right - left, single ? 0 : 6)
               const done = task.status === 'done'
               const overdue = !done && due !== null && due < nowTime
-              const label = `${task.title}. Начало: ${formatMoment(draft.start)}. Дедлайн: ${formatMoment(draft.due)}. Исполнитель: ${memberName(task.assignee_id)}.`
+              const label = `${task.title}. ${boardStatusLabel(task.status)}. Начало: ${formatMoment(draft.start)}. Дедлайн: ${formatMoment(draft.due)}. Исполнитель: ${memberName(task.assignee_id)}.`
               return (
                 <div key={task.id} className="gantt-row" style={{ gridTemplateColumns: `var(--gantt-label) ${trackWidth}px` }}>
                   <div className="gantt-label gantt-sticky" title={task.title}>
                     <span className="block truncate font-medium">{task.title}</span>
+                    <span className="block text-xs text-gray-500">{boardStatusLabel(task.status)}</span>
                     <span className="block truncate text-xs text-gray-500">{single ? (start ? 'Нет дедлайна' : 'Нет даты начала') : memberName(task.assignee_id)}</span>
                   </div>
                   <div className="gantt-track" style={{ width: trackWidth }}>
@@ -335,7 +334,7 @@ export function ProjectGantt({
                     <button
                       type="button"
                       className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline min-h-8"
-                      onClick={() => setAssigning({ taskId: task.id, start: toLocalInput(task.start_at), due: toLocalInput(task.due_at) })}
+                      onClick={() => setAssigning({ taskId: task.id, snapshot: { ...task }, start: toLocalInput(task.start_at), due: toLocalInput(task.due_at) })}
                     >
                       <CalendarPlus size={14} aria-hidden="true" />Назначить сроки
                     </button>

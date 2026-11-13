@@ -43,6 +43,8 @@ export function ProjectTasks({
   const [creatingTask, setCreatingTask] = useState(false)
 
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
+  // Snapshot captured when opening the form, not the refreshed task at submit time.
+  const [editSnapshot, setEditSnapshot] = useState<Task | null>(null)
   const [editTaskTitle, setEditTaskTitle] = useState('')
   const [editTaskDescription, setEditTaskDescription] = useState('')
   const [editTaskStartAt, setEditTaskStartAt] = useState('')
@@ -243,6 +245,9 @@ export function ProjectTasks({
       return
     }
 
+    const rangeError = validateTaskRange(startAt, dueAt)
+    if (rangeError) { showAppMessage(rangeError, 'warning'); return }
+
     setCreatingTask(true)
 
     const { data: createdTask, error } = await supabase
@@ -336,6 +341,7 @@ export function ProjectTasks({
       logAppError('Ошибка обновления статуса задачи:', result.message)
       showAppMessage(result.message, 'error', 7000)
       setBoardAnnouncement(`Задача «${task.title}» осталась в колонке «${boardStatusLabel(from)}». ${result.message}`)
+      if (result.reason === 'conflict') await onTasksChanged()
       return
     }
 
@@ -483,6 +489,7 @@ export function ProjectTasks({
   }
 
   const startEditTask = (task: Task) => {
+    setEditSnapshot({ ...task })
     setEditingTaskId(task.id)
     setEditTaskTitle(task.title)
     setEditTaskDescription(task.description || '')
@@ -492,6 +499,7 @@ export function ProjectTasks({
   }
 
   const cancelEditTask = () => {
+    setEditSnapshot(null)
     setEditingTaskId(null)
     setEditTaskTitle('')
     setEditTaskDescription('')
@@ -501,11 +509,13 @@ export function ProjectTasks({
   }
 
   const handleSaveTaskEdit = async (taskId: string) => {
-    const task = tasks.find((t) => t.id === taskId)
+    const task = editSnapshot
+    if (!task || task.id !== taskId || savingTaskId) return
     const title = editTaskTitle.trim()
     const description = editTaskDescription.trim()
-    const startAt = fromDateTimeLocalValue(editTaskStartAt)
-    const dueAt = fromDateTimeLocalValue(editTaskDueAt)
+    // An untouched minute-precision input must not truncate stored seconds/microseconds.
+    const startAt = editTaskStartAt === toDateTimeLocalValue(task.start_at) ? task.start_at : fromDateTimeLocalValue(editTaskStartAt)
+    const dueAt = editTaskDueAt === toDateTimeLocalValue(task.due_at) ? task.due_at : fromDateTimeLocalValue(editTaskDueAt)
     const penaltyPercent = Number(editTaskPenaltyPercent) || 10
 
     if (!title) {
@@ -521,7 +531,7 @@ export function ProjectTasks({
 
     setSavingTaskId(taskId)
 
-    const { error } = await supabase
+    let query = supabase
       .from('tasks')
       .update({
         title,
@@ -532,11 +542,25 @@ export function ProjectTasks({
       })
       .eq('id', taskId)
 
+    // One atomic UPDATE under RLS: compare every field this form overwrites.
+    for (const field of ['title', 'description', 'start_at', 'due_at', 'penalty_percent'] as const) {
+      const expected = task[field]
+      query = expected === null ? query.is(field, null) : query.eq(field, expected)
+    }
+    const { data: saved, error } = await query.select('id')
+
     setSavingTaskId(null)
 
     if (error) {
       logAppError('Ошибка редактирования задачи:', error)
       showAppMessage('Ошибка редактирования задачи: ' + error.message)
+      return
+    }
+
+    if (!saved?.length) {
+      showAppMessage('Задача уже изменена или доступ отозван. Показаны актуальные данные; откройте редактирование заново.', 'warning', 8000)
+      cancelEditTask()
+      await onTasksChanged()
       return
     }
 

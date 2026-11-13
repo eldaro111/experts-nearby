@@ -7,6 +7,7 @@ import { chromium } from 'playwright'
 import { spawn } from 'node:child_process'
 import { rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { resolve, relative, isAbsolute } from 'node:path'
 
 export const root = fileURLToPath(new URL('../../', import.meta.url))
 export const FAKE_SUPABASE = 'https://pilot-test.supabase.co'
@@ -15,6 +16,7 @@ const next = 'node_modules/next/dist/bin/next'
 export function appEnv(port, extra = {}) {
   return {
     ...process.env,
+    NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --require="${resolve(root, 'scripts/tests/no-env-files.js').replaceAll('\\', '/')}"`,
     NEXT_PUBLIC_SUPABASE_URL: FAKE_SUPABASE,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: 'local-test-public-key',
     NEXT_PUBLIC_SITE_URL: `http://127.0.0.1:${port}`,
@@ -24,7 +26,10 @@ export function appEnv(port, extra = {}) {
 
 export async function buildApp(env) {
   // Turbopack's build cache was observed to keep a stale globals.css after edits; start clean.
-  rmSync(`${root}.next/cache/turbopack`, { recursive: true, force: true })
+  const cache = resolve(root, '.next/cache/turbopack')
+  const within = relative(resolve(root), cache)
+  if (isAbsolute(within) || within.startsWith('..')) throw new Error('Build cache outside workspace')
+  rmSync(cache, { recursive: true, force: true })
   await new Promise((resolve, reject) => {
     const build = spawn(process.execPath, [next, 'build'], { cwd: root, env, stdio: ['ignore', 'ignore', 'inherit'] })
     build.once('error', reject)
@@ -84,6 +89,17 @@ export function createBackend(tables, { userId, email = 'test@example.ru', rpc =
         return route.fulfill({ status: failure.status || 400, headers, contentType: 'application/json', body: JSON.stringify({ message: failure.message, code: failure.code || 'P0001' }) })
       }
       if (u.pathname.includes('/rest/v1/rpc/')) {
+        // Transport mock only; PostgreSQL rights/locking/history are tested in PGlite.
+        if (table === 'reschedule_task_secure' && !rpc[table]) {
+          const body = req.postDataJSON()
+          const row = (tables.tasks || []).find((t) => t.id === body.p_task_id)
+          const same = (a,b) => a == null && b == null || a != null && b != null && new Date(a).getTime() === new Date(b).getTime()
+          if (!row || !same(row.start_at,body.p_expected_start_at) || !same(row.due_at,body.p_expected_due_at)) {
+            return route.fulfill({ status: 409, headers, contentType: 'application/json', body: JSON.stringify({ code:'PT409', message:'Сроки задачи уже изменил другой участник.' }) })
+          }
+          row.start_at=body.p_new_start_at; row.due_at=body.p_new_due_at
+          return route.fulfill({ status:200, headers, contentType:'application/json', body:JSON.stringify(row) })
+        }
         const handler = rpc[table]
         const data = typeof handler === 'function' ? handler(req.postDataJSON() || {}) : handler ?? null
         return route.fulfill({ status: 200, headers, contentType: 'application/json', body: JSON.stringify(data) })

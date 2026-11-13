@@ -8,6 +8,7 @@ import { logAppError, showAppMessage } from '@/lib/appFeedback'
 
 import type { Listing, ProjectEvent, ProjectMember, Task } from './types'
 import { ProjectGantt } from './ProjectGantt'
+import { boardStatusLabel } from '@/lib/taskLabels'
 
 const initialNow = Date.now()
 const CLOCK_REFRESH_INTERVAL_MS = 60_000
@@ -294,7 +295,7 @@ export function ProjectCalendar({
           sourceId: task.id,
           kind: 'task-start',
           title: task.title,
-          subtitle: `Старт · ${getMemberName(task.assignee_id)}`,
+          subtitle: `Старт · ${boardStatusLabel(task.status)} · ${getMemberName(task.assignee_id)}`,
           starts_at: task.start_at,
           ends_at: task.start_at,
           isOverdue: false,
@@ -307,7 +308,7 @@ export function ProjectCalendar({
           sourceId: task.id,
           kind: 'task-due',
           title: task.title,
-          subtitle: `Дедлайн · ${getMemberName(task.assignee_id)}`,
+          subtitle: `Дедлайн · ${boardStatusLabel(task.status)} · ${getMemberName(task.assignee_id)}`,
           starts_at: task.due_at,
           ends_at: task.due_at,
           isOverdue: isTaskOverdue(task),
@@ -580,7 +581,7 @@ export function ProjectCalendar({
                     {items.slice(0, 3).map((item) => (
                       <div
                         key={item.id}
-                        title={`${item.title} · ${formatDateTime(item.starts_at || null)} → ${formatDateTime(item.ends_at || null)}`}
+                        title={`${item.title} · ${item.subtitle} · ${formatDateTime(item.starts_at || null)} → ${formatDateTime(item.ends_at || null)}`}
                         className={`rounded px-2 py-1 text-xs leading-tight border ${
                           calendarItemClassName(item)
                         }`}
@@ -589,6 +590,7 @@ export function ProjectCalendar({
                           {calendarItemLabel(item.kind)}
                         </div>
                         <div className="truncate">{item.title}</div>
+                        {item.kind.startsWith('task-') && <div className="truncate">{item.subtitle}</div>}
                       </div>
                     ))}
 
