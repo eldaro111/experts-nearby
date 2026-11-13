@@ -398,6 +398,18 @@ body.is-task-dragging, body.is-task-dragging * { cursor: grabbing !important; us
 .project-picker-title { display: block; font-weight: 600; overflow-wrap: anywhere; }
 .project-picker-meta { display: block; margin-top: .15rem; color: #5b6b82; font-size: .8rem; }
 .project-picker-state { display: grid; gap: 1rem; color: #394a64; font-size: .9rem; }
+.project-picker-search { display: grid; gap: .35rem; margin-bottom: .75rem; color: #394a64; font-size: .85rem; font-weight: 550; }
+.project-picker-search-field { display: flex; align-items: center; gap: .5rem; min-height: 2.75rem; padding: 0 .75rem; border: 1px solid #c9d8f2; border-radius: .7rem; background: #fff; color: #5b6b82; }
+.project-picker-search-field:focus-within { border-color: #5088f0; box-shadow: 0 0 0 3px #245ce32e; }
+.app-modal .project-picker-search-field input { flex: 1; min-width: 0; min-height: 2.5rem; margin: 0; padding: 0; border: 0; border-radius: 0; outline: none; box-shadow: none; background: transparent; color: #14233d; font-size: .95rem; font-weight: 400; }
+.project-picker-section + .project-picker-section, div + div > .project-picker-section { margin-top: 1rem; }
+.project-picker-heading { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; margin-bottom: .5rem; color: #394a64; font-size: .8rem; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
+.project-picker-count { color: #8a99ad; font-weight: 600; letter-spacing: 0; }
+.project-picker-note { margin-top: .4rem; color: #5b6b82; font-size: .8rem; font-weight: 400; }
+.project-picker-error { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; margin-top: .5rem; padding: .6rem .75rem; border: 1px solid #fecdd3; border-radius: .6rem; background: #fff1f2; color: #9f1239; font-size: .85rem; }
+.project-picker-more { display: flex; width: 100%; align-items: center; justify-content: center; min-height: 2.75rem; margin-top: .5rem; border: 1px dashed #b9c9e6; border-radius: .7rem; color: #245ce3; font-size: .875rem; font-weight: 600; transition: background-color 160ms, border-color 160ms; }
+.project-picker-more:hover { background: #f4f8ff; border-color: #8fb0f5; }
+.project-picker-more:focus-visible { outline: 3px solid #5088f0; outline-offset: 2px; }
 .task-details-list { display: grid; gap: .55rem; font-size: .9rem; }
 .task-details-list > div { display: grid; grid-template-columns: 8.5rem minmax(0, 1fr); gap: .75rem; }
 .task-details-list dt { color: #5b6b82; }

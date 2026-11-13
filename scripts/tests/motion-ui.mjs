@@ -245,13 +245,15 @@ try {
       assert.equal(new URL(page.url()).pathname, '/')
       const items = dialog.locator('.project-picker-item')
       assert.equal(await items.count(), 3)
-      // Active projects first (newest first), the completed one last.
-      assert.deepEqual(await dialog.locator('.project-picker-title').allInnerTexts(), ['Датчик давления', 'Робот-манипулятор', 'Завершённый стенд'])
+      // Two sections: own projects (active first, the completed one last), then participation.
+      await page.waitForFunction(() => !document.querySelector('dialog [data-section] [role=status]'))
+      assert.deepEqual(await dialog.locator('[data-section="owned"] .project-picker-title').allInnerTexts(), ['Робот-манипулятор', 'Завершённый стенд'])
+      assert.deepEqual(await dialog.locator('[data-section="member"] .project-picker-title').allInnerTexts(), ['Датчик давления'])
       assert.ok((await dialog.innerText()).includes('Вы участник'))
       // The modal keeps its own compact heading inside the blue panel.
       assert.ok(await dialog.locator('.app-modal-title').evaluate((el) => parseFloat(getComputedStyle(el).fontSize) <= 20))
       await settle(page); await page.screenshot({ path: `${out}/home-picker-1440.png` })
-      assert.ok((await dialog.locator('.project-picker-item').last().innerText()).includes('Завершён'))
+      assert.ok((await dialog.locator('[data-section="owned"] .project-picker-item').last().innerText()).includes('Завершён'))
       await page.keyboard.press('Escape')
       await dialog.waitFor({ state: 'hidden' })
       assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-workspace-shortcut')), 'team')
@@ -338,18 +340,20 @@ try {
     const backend = freshBackend('many')
     const { context, page } = await openPage(browser, backend, { signed: true })
     await check('home: a loading error is shown with a retry, not hidden', async () => {
-      // The panel loads on mount and once more on the click: both fail, the retry succeeds.
-      backend.failures.push({ method: 'GET', table: 'listings', status: 500, message: 'temporary failure' }, { method: 'GET', table: 'listings', status: 500, message: 'temporary failure' })
-      // Wait for the load on mount to fail first, so the click makes the second (failing) attempt.
-      const firstFailure = page.waitForResponse((r) => r.url().includes('/rest/v1/listings') && r.status() === 500)
+      // The first load fails in both sections (own projects and participation); each one retries on its own.
+      backend.failures.push({ method: 'GET', table: 'listings', status: 500, message: 'temporary failure' }, { method: 'GET', table: 'applications', status: 500, message: 'temporary failure' })
+      const failed = page.waitForResponse((r) => r.url().includes('/rest/v1/applications') && r.status() === 500)
       await page.goto(base + '/')
-      await firstFailure
+      await failed
       await page.getByRole('button', { name: /План работ/ }).click()
       const dialog = page.getByRole('dialog', { name: 'План работ: выберите проект' })
-      await dialog.getByRole('alert').filter({ hasText: 'Не удалось загрузить Ваши проекты' }).waitFor()
-      await dialog.getByRole('button', { name: 'Повторить' }).click()
-      await dialog.locator('.project-picker-item').first().waitFor()
-      assert.equal(await dialog.locator('.project-picker-item').count(), 3)
+      for (const kind of ['owned', 'member']) {
+        const section = dialog.locator(`[data-section="${kind}"]`)
+        await section.getByRole('alert').filter({ hasText: 'Не удалось загрузить проекты' }).waitFor()
+        await section.getByRole('button', { name: 'Повторить' }).click()
+      }
+      await page.waitForFunction(() => document.querySelectorAll('dialog .project-picker-item').length === 3)
+      assert.equal(await dialog.getByRole('alert').count(), 0)
     })
     await context.close()
   }
