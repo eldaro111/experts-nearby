@@ -7,6 +7,12 @@ set local statement_timeout = '60s';
 do $preflight$
 declare r record;
 begin
+ if to_regclass('public.project_planning_requests') is not null or exists(
+   select 1 from pg_proc where pronamespace='public'::regnamespace and proname in
+    ('reorder_project_stages','replace_project_lead','planning_claim_request_internal',
+     'create_project_sprint_once','close_project_sprint_once','get_project_planning_request')) then
+   raise exception 'ER-012 integration: migration already applied or new API names occupied (including overloads). Inspect schema; do not overwrite or grant access to unknown functions.';
+ end if;
  for r in select unnest(array['planning_lock_internal','planning_version_internal',
    'planning_guard_task_internal','update_project_planning','planning_event_internal',
    'create_project_sprint','close_project_sprint']) as name loop

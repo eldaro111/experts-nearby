@@ -14,6 +14,13 @@ const create=async(p,key,version,name='Same name')=>one('select * from create_pr
 const receipt=async(p,key)=>(await one('select get_project_planning_request($1,$2) r',[p,key])).r
 const close=async(s,key,decisions=[],version=s.version)=>one('select * from close_project_sprint_once($1,$2,$3,$4,$5,$6)',[key,s.id,version,true,'Synthetic cancellation',JSON.stringify(decisions)])
 try {
+ await check('unexpected new API overload aborts the entire migration without granting or replacing anything',async()=>{
+   await admin();await env.db.exec('create function public.reorder_project_stages(text) returns integer language sql as $$select 1$$;revoke all on function public.reorder_project_stages(text) from public,anon,authenticated;')
+   await fails(()=>env.db.exec(readMigration(atomicMigration)),'P0001');await env.db.exec('rollback;')
+   const result=await one("select to_regclass('public.project_planning_requests') receipts,to_regprocedure('public.replace_project_lead(uuid,bigint,text,uuid)') lead,has_function_privilege('authenticated','public.reorder_project_stages(text)','EXECUTE') allowed")
+   assert.deepEqual(result,{receipts:null,lead:null,allowed:false})
+   await env.db.exec('drop function public.reorder_project_stages(text);')
+ })
  await check('new migration preserves existing task rows and history byte-for-byte as JSON',async()=>{
    const p=await project();await task(p,{status:'legacy'});await task(p,{status:'done',story_points:5})
    const before=await q('select to_jsonb(t) row from tasks t order by id'), h=await history(p)
