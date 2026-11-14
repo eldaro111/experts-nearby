@@ -393,11 +393,14 @@ try {
 
   await check('custom stage on the working board: configure, keyboard move, reload, strict WIP/refusal/conflict rollback', async () => {
     const t = seed(), b = createBackend(t, { userId: USER, rpc: rpcStatic, strictQueries: true }), m = createPlanningMock(t)
+    t.tasks.push(task('T7','Старый неизвестный статус','legacy-unmapped'))
     const ctx = await open(browser,b,m), page=ctx.page
     let p=await openProject(page,base)
     await p.getByRole('radio',{name:/^Свой процесс/}).check()
     await p.getByRole('button',{name:'Сохранить настройки'}).click()
     await notice(p,'Настройки планирования сохранены.').waitFor()
+    await page.locator('[data-task-card="T7"]').getByText('Статус: legacy-unmapped',{exact:true}).waitFor()
+    assert.equal(await page.getByLabel('Этап задачи «Старый неизвестный статус»').inputValue(),'unassigned')
     await p.getByRole('button',{name:'Добавить этап'}).click()
     const form=p.getByRole('form',{name:'Новый этап'})
     await form.getByLabel('Название',{exact:true}).fill('Сборка CAD')
@@ -409,6 +412,8 @@ try {
     await page.getByLabel('Этап задачи «Собрать требования»').selectOption(stage.id)
     await page.locator(`[data-stage-id="${stage.id}"] [data-task-card="T1"]`).waitFor()
     p=await openProject(page,base)
+    assert.equal(t.tasks.find(x=>x.id==='T7').stage_id,null)
+    await page.locator('[data-task-card="T7"]').getByText('Статус: legacy-unmapped',{exact:true}).waitFor()
     await page.locator(`[data-stage-id="${stage.id}"] [data-task-card="T1"]`).waitFor()
     assert.deepEqual([t.tasks[0].start_at,t.tasks[0].due_at],dates)
     await p.getByRole('radio',{name:/^Строг/}).check()
