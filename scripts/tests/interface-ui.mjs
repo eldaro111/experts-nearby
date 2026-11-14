@@ -373,7 +373,16 @@ try {
       assert.equal(taskRow(backend, 'T3').status, 'done')
     })
     await check('board: unknown status can be moved explicitly into a column', async () => {
-      { const from = await center(grip('Проверка внешним экспертом')); await dragMouse(page, from, await columnPoint(column('doing'), from)) }
+      const from = await center(grip('Проверка внешним экспертом'))
+      const to = await columnPoint(column('doing'), from)
+      await dragMouse(page, from, to)
+      const target = await page.evaluate(({ x, y }) => ({
+        hit: document.elementFromPoint(x, y)?.closest('[data-drop-status]')?.getAttribute('data-drop-status'),
+        highlighted: document.querySelector('.is-drop-target')?.getAttribute('data-drop-status'),
+        scrollY,
+      }), to)
+      writeFileSync(`${out}/unknown-status-drag.json`, JSON.stringify({ from, to, target, patches: tasksPatches(backend, 'T4') }, null, 2))
+      assert.equal(target.hit, 'doing', 'drag must end over a real visible target before releasing')
       await page.mouse.up()
       await page.waitForFunction(() => document.querySelector('section[data-drop-status="doing"]')?.textContent?.includes('Проверка внешним экспертом') && !document.querySelector('.task-card.is-saving'))
       assert.equal(taskRow(backend, 'T4').status, 'doing')
