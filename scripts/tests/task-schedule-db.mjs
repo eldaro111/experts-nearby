@@ -3,7 +3,7 @@ import { PGlite } from '@electric-sql/pglite'
 import { readFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
 const db = new PGlite()
-const read = name => readFileSync(new URL(`../../supabase/migrations/${name}`, import.meta.url), 'utf8')
+const read = name => readFileSync(new URL(`../../supabase/migrations/${name}`, import.meta.url), 'utf8').replaceAll('\r\n','\n')
 const schedule = read('20261112090000_task_schedule.sql')
 const market = read('20261112091000_market_system_text.sql')
 const diagnostic = readFileSync(new URL('../../supabase/diagnostics/ER-001-task-schedule.sql', import.meta.url), 'utf8')

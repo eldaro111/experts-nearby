@@ -20,6 +20,14 @@ try {
     '20261004090000_pilot_feedback.sql',
     '20261004150000_recommendations.sql',
     '20261019160000_startup_projects.sql',
+    ...(process.argv.includes('--planning') ? [
+      '20261101090000_project_file_compression.sql',
+      '20261110090000_project_activity_execute.sql',
+      '20261112090000_task_schedule.sql',
+      '20261112091000_market_system_text.sql',
+      '20261114090000_project_planning.sql',
+      ...(process.argv.includes('--sprints') ? ['20261114100000_project_sprints.sql'] : []),
+    ] : []),
   ]) {
     let sql = readFileSync(`${root}/supabase/migrations/${filename}`, 'utf8')
     if (filename.includes('baseline')) sql = `begin;\n${sql}\ncommit;`
