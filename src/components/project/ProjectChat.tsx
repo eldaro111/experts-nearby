@@ -10,19 +10,22 @@ import {
   CHAT_PAGE_SIZE,
   anchoredScrollTop,
   arrivedFromOthers,
+  compareMessages,
   isNearBottom,
   isSendKey,
   mergeMessages,
   pendingOnly,
+  sameMessages,
   type OutgoingMessage,
 } from '@/lib/projectChat'
+import { readChatPage, readChatWindow } from '@/lib/projectChatRead'
 import styles from './ProjectChat.module.css'
 
 import type { ProjectMember, ProjectMessage } from './types'
 
 // Same table protocol as before: rows of project_messages / project_message_hidden under RLS.
-// The table is not in the Realtime publication: the chat reads again on open, when the window regains
-// focus or becomes visible, and every 30 s while it is open. No typing/read/online indicators exist.
+// Realtime only invalidates authorised reads. Focus/visibility and polling reconcile the loaded
+// window even if replication is unavailable. No typing/read/online indicators exist.
 const REFRESH_MS = 30_000
 const SEND_TIMEOUT_MS = 15_000
 
@@ -34,7 +37,7 @@ interface ProjectChatProps {
 
 type PendingScroll =
   | { kind: 'bottom'; smooth: boolean }
-  | { kind: 'anchor'; scrollTop: number; scrollHeight: number }
+  | { kind: 'anchor'; scrollTop: number; scrollHeight: number; markers: { id: string; top: number }[] }
   | { kind: 'message'; id: string }
 
 const prefersReducedMotion = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -82,9 +85,24 @@ export function ProjectChat({ projectId, currentUserId, members }: ProjectChatPr
   const autoScrolling = useRef(false)
   const pendingScroll = useRef<PendingScroll | null>(null)
   const messagesRef = useRef<ProjectMessage[]>([])
+  const hiddenRef = useRef<string[]>([])
   const readyRef = useRef(false)
   const inFlight = useRef(new Set<string>())
   const composing = useRef(false)
+  const refreshing = useRef(false)
+  const refreshRequested = useRef(false)
+  const olderBusy = useRef(false)
+  const localRevision = useRef(0)
+
+  const preserveReading = useCallback(() => {
+    const element = scrollRef.current
+    if (!element || stickToBottom.current) return
+    const top = element.getBoundingClientRect().top
+    const markers = [...element.querySelectorAll<HTMLElement>('[data-message-id]')]
+      .filter(node => node.getBoundingClientRect().bottom > top)
+      .slice(0, 5).map(node => ({ id: node.dataset.messageId!, top: node.getBoundingClientRect().top - top }))
+    pendingScroll.current = { kind: 'anchor', scrollTop: element.scrollTop, scrollHeight: element.scrollHeight, markers }
+  }, [])
 
   /** All message list updates go through here, so async merges always start from the latest list. */
   const commit = useCallback((next: ProjectMessage[]) => {
@@ -92,22 +110,69 @@ export function ProjectChat({ projectId, currentUserId, members }: ProjectChatPr
     setMessages(next)
   }, [])
 
+  const commitHidden = useCallback((value: string[] | ((ids: string[]) => string[])) => {
+    const next = typeof value === 'function' ? value(hiddenRef.current) : value
+    hiddenRef.current = next
+    setHiddenMessageIds(next)
+  }, [])
+
   const readHidden = useCallback(async (ids: string[]) => {
     if (!currentUserId || ids.length === 0) return { ids: [] as string[], error: null }
-    const { data, error } = await supabase
-      .from('project_message_hidden')
-      .select('message_id')
-      .eq('user_id', currentUserId)
-      .in('message_id', ids)
-    return { ids: ((data || []) as { message_id: string }[]).map((row) => row.message_id), error }
+    const my = generation.current
+    const hidden: string[] = []
+    for (let i = 0; i < ids.length; i += CHAT_PAGE_SIZE) {
+      if (my !== generation.current) return { ids: [], error: null }
+      const { data, error } = await supabase.from('project_message_hidden').select('message_id')
+        .eq('user_id', currentUserId).in('message_id', ids.slice(i, i + CHAT_PAGE_SIZE))
+      if (error) throw error // Do not accidentally reveal hidden rows on a failed read.
+      hidden.push(...((data || []) as { message_id: string }[]).map(row => row.message_id))
+    }
+    return { ids: hidden, error: null }
   }, [currentUserId])
 
-  const readLatest = useCallback(() => supabase
-    .from('project_messages')
-    .select('*')
-    .eq('project_id', projectId)
-    .order('created_at', { ascending: false })
-    .limit(CHAT_PAGE_SIZE), [projectId])
+  /** Serial reconciliation: a late read cannot undo a local write or a newer read. */
+  const refresh = useCallback(async () => {
+    refreshRequested.current = true
+    if (!readyRef.current || refreshing.current) return
+    refreshing.current = true
+    const my = generation.current
+    try {
+      while (refreshRequested.current && readyRef.current && my === generation.current) {
+        refreshRequested.current = false
+        const revision = localRevision.current
+        const previous = messagesRef.current
+        const floor = previous[0]
+        const rows = await readChatWindow(supabase, projectId, floor, () => my === generation.current)
+        if (!rows || my !== generation.current) return
+        const hidden = await readHidden(rows.map(row => row.id))
+        if (my !== generation.current) return
+        if (revision !== localRevision.current) { refreshRequested.current = true; continue }
+        const known = new Set(previous.map(message => message.id))
+        // Keep older history appended while this read ran. Replace the reconciled range, so an
+        // inaccessible/deleted record does not survive forever in the local cache.
+        const older = floor ? messagesRef.current.filter(row => compareMessages(row, { ...floor, id: '' }) < 0) : []
+        const next = mergeMessages(older, rows)
+        const olderIds = new Set(older.map(row => row.id))
+        const nextHidden = [...hiddenRef.current.filter(id => olderIds.has(id)), ...hidden.ids]
+        if (sameMessages(next, messagesRef.current) && nextHidden.length === hiddenRef.current.length
+          && nextHidden.every(id => hiddenRef.current.includes(id))) continue
+        const arrived = arrivedFromOthers(previous, next, currentUserId).filter(row => !hidden.ids.includes(row.id))
+        preserveReading()
+        commitHidden(nextHidden)
+        setUnseen(ids => ids.filter(id => next.some(row => row.id === id) && !nextHidden.includes(id)))
+        setFresh(ids => [...new Set([...ids, ...rows.filter(row => !known.has(row.id)).map(row => row.id)])])
+        if (arrived.length) {
+          if (stickToBottom.current) pendingScroll.current = { kind: 'bottom', smooth: true }
+          else setUnseen(ids => [...new Set([...ids, ...arrived.map(row => row.id)])])
+          setAnnouncement(`Новых сообщений: ${arrived.length}`)
+        }
+        if (!rows.length && !older.length) setHasOlder(false)
+        commit(next)
+      }
+    } catch (error) {
+      if (my === generation.current) logAppError('Ошибка обновления обсуждения:', error)
+    } finally { refreshing.current = false }
+  }, [commit, commitHidden, currentUserId, preserveReading, projectId, readHidden])
 
   // First page. The component is keyed by project and account (FloatingProjectChat), and every answer
   // is checked against the generation, so a late answer of a previous session is dropped.
@@ -115,54 +180,44 @@ export function ProjectChat({ projectId, currentUserId, members }: ProjectChatPr
     generation.current += 1
     const my = generation.current
     const load = async () => {
-      const { data, error } = await readLatest()
+      try {
+      const rows = await readChatPage(supabase, projectId)
       if (my !== generation.current) return
-      if (error) {
-        logAppError('Ошибка загрузки обсуждения:', error)
-        setLoadState('error')
-        return
-      }
-      const rows = ((data || []) as ProjectMessage[]).reverse()
       const hidden = await readHidden(rows.map((row) => row.id))
       if (my !== generation.current) return
-      if (hidden.error) logAppError('Ошибка загрузки скрытых сообщений:', hidden.error)
       pendingScroll.current = { kind: 'bottom', smooth: false }
       commit(mergeMessages([], rows))
-      setHiddenMessageIds(hidden.ids)
+      commitHidden(hidden.ids)
       setHasOlder(rows.length === CHAT_PAGE_SIZE)
       readyRef.current = true
       setLoadState('ready')
+      if (refreshRequested.current) void refresh()
+      } catch (error) {
+        if (my !== generation.current) return
+        logAppError('Ошибка загрузки обсуждения:', error)
+        setLoadState('error')
+      }
     }
     void load()
     return () => { generation.current += 1 }
-  }, [commit, readHidden, readLatest])
+  }, [commit, commitHidden, projectId, readHidden, refresh])
 
-  /** Reads the latest page again and merges it; new messages of others below the view are counted. */
-  const refresh = useCallback(async () => {
-    if (!readyRef.current) return
-    const my = generation.current
-    const { data, error } = await readLatest()
-    if (my !== generation.current || error) {
-      if (error) logAppError('Ошибка обновления обсуждения:', error)
-      return
+  useEffect(() => {
+    if (!currentUserId || sessionChanged) return
+    let active = true
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const invalidate = () => {
+      if (!active) return
+      // A burst or replay only requests one read; payloads are never displayed without RLS reads.
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => { if (active) void refresh() }, 120)
     }
-    const rows = ((data || []) as ProjectMessage[]).reverse()
-    const previous = messagesRef.current
-    const known = new Set(previous.map((message) => message.id))
-    const added = rows.filter((row) => !known.has(row.id))
-    const hidden = await readHidden(added.map((row) => row.id))
-    if (my !== generation.current) return
-    const next = mergeMessages(messagesRef.current, rows)
-    const arrived = arrivedFromOthers(previous, next, currentUserId).filter((message) => !hidden.ids.includes(message.id))
-    if (hidden.ids.length) setHiddenMessageIds((ids) => [...new Set([...ids, ...hidden.ids])])
-    if (added.length) setFresh((ids) => [...ids, ...added.map((row) => row.id)])
-    if (arrived.length) {
-      if (stickToBottom.current) pendingScroll.current = { kind: 'bottom', smooth: true }
-      else setUnseen((ids) => [...new Set([...ids, ...arrived.map((message) => message.id)])])
-      setAnnouncement(`Новых сообщений: ${arrived.length}`)
-    }
-    commit(next)
-  }, [commit, currentUserId, readHidden, readLatest])
+    const channel = supabase.channel(`project-chat:${projectId}:${currentUserId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'project_messages', filter: `project_id=eq.${projectId}` }, invalidate)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'project_messages', filter: `project_id=eq.${projectId}` }, invalidate)
+      .subscribe(status => { if (['SUBSCRIBED', 'CHANNEL_ERROR', 'TIMED_OUT'].includes(status)) invalidate() })
+    return () => { active = false; clearTimeout(timer); void supabase.removeChannel(channel) }
+  }, [currentUserId, projectId, refresh, sessionChanged])
 
   useEffect(() => {
     const onVisible = () => { if (document.visibilityState === 'visible') void refresh() }
@@ -185,42 +240,40 @@ export function ProjectChat({ projectId, currentUserId, members }: ProjectChatPr
       commit([])
       setOutgoing([])
       setUnseen([])
-      setHiddenMessageIds([])
+      commitHidden([])
+      setNewMessageBody('')
+      setReplyToMessageId(null)
+      setEditingMessageId(null)
+      setEditMessageBody('')
+      setAnnouncement('')
       setSessionChanged(true)
     })
     return () => data.subscription.unsubscribe()
-  }, [commit, currentUserId])
+  }, [commit, commitHidden, currentUserId])
 
   const loadOlder = async () => {
     const oldest = messagesRef.current[0]
-    if (!oldest || olderState === 'loading') return
+    if (!oldest || olderBusy.current || !readyRef.current) return
+    olderBusy.current = true
     const my = generation.current
     setOlderState('loading')
-    const { data, error } = await supabase
-      .from('project_messages')
-      .select('*')
-      .eq('project_id', projectId)
-      .lte('created_at', oldest.created_at)
-      .order('created_at', { ascending: false })
-      .limit(CHAT_PAGE_SIZE)
+    try {
+    const rows = await readChatPage(supabase, projectId, oldest)
     if (my !== generation.current) return
-    if (error) {
-      logAppError('Ошибка загрузки предыдущих сообщений:', error)
-      setOlderState('error')
-      return
-    }
-    const rows = ((data || []) as ProjectMessage[]).reverse()
     const known = new Set(messagesRef.current.map((message) => message.id))
     const added = rows.filter((row) => !known.has(row.id))
     const hidden = await readHidden(added.map((row) => row.id))
     if (my !== generation.current) return
-    const element = scrollRef.current
-    // Keep the message being read in place: older messages grow the content above it.
-    if (element) pendingScroll.current = { kind: 'anchor', scrollTop: element.scrollTop, scrollHeight: element.scrollHeight }
-    if (hidden.ids.length) setHiddenMessageIds((ids) => [...new Set([...ids, ...hidden.ids])])
+    preserveReading()
+    if (hidden.ids.length) commitHidden((ids) => [...new Set([...ids, ...hidden.ids])])
     commit(mergeMessages(messagesRef.current, added))
-    setHasOlder(rows.length === CHAT_PAGE_SIZE && added.length > 0)
+    setHasOlder(rows.length === CHAT_PAGE_SIZE)
     setOlderState('idle')
+    } catch (error) {
+      if (my !== generation.current) return
+      logAppError('Ошибка загрузки предыдущих сообщений:', error)
+      setOlderState('error')
+    } finally { olderBusy.current = false }
   }
 
   // Scroll after the new list is on screen: to the bottom, to a message, or back to the read position.
@@ -230,7 +283,11 @@ export function ProjectChat({ projectId, currentUserId, members }: ProjectChatPr
     if (!element || !action) return
     pendingScroll.current = null
     if (action.kind === 'anchor') {
-      element.scrollTop = anchoredScrollTop(action, element.scrollHeight)
+      const marker = action.markers.find(item => element.querySelector(`[data-message-id="${CSS.escape(item.id)}"]`))
+      const target = marker && element.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(marker.id)}"]`)
+      element.scrollTop = target && marker
+        ? element.scrollTop + target.getBoundingClientRect().top - element.getBoundingClientRect().top - marker.top
+        : anchoredScrollTop(action, element.scrollHeight)
     } else if (action.kind === 'bottom') {
       stickToBottom.current = true
       autoScrolling.current = action.smooth && !prefersReducedMotion()
@@ -292,6 +349,7 @@ export function ProjectChat({ projectId, currentUserId, members }: ProjectChatPr
   }
 
   const confirmSent = (row: ProjectMessage) => {
+    localRevision.current += 1
     commit(mergeMessages(messagesRef.current, [row]))
     setOutgoing((list) => list.filter((item) => item.id !== row.id))
     setAnnouncement('Сообщение отправлено.')
@@ -443,6 +501,8 @@ export function ProjectChat({ projectId, currentUserId, members }: ProjectChatPr
       return
     }
     cancelEditMessage()
+    localRevision.current += 1
+    preserveReading()
     commit(mergeMessages(messagesRef.current, data as ProjectMessage[]))
   }
 
@@ -470,6 +530,8 @@ export function ProjectChat({ projectId, currentUserId, members }: ProjectChatPr
     }
     if (replyToMessageId === messageId) setReplyToMessageId(null)
     if (editingMessageId === messageId) cancelEditMessage()
+    localRevision.current += 1
+    preserveReading()
     commit(mergeMessages(messagesRef.current, data as ProjectMessage[]))
   }
 
@@ -489,7 +551,10 @@ export function ProjectChat({ projectId, currentUserId, members }: ProjectChatPr
       return
     }
     if (replyToMessageId === messageId) setReplyToMessageId(null)
-    setHiddenMessageIds((ids) => (ids.includes(messageId) ? ids : [...ids, messageId]))
+    localRevision.current += 1
+    preserveReading()
+    commitHidden((ids) => (ids.includes(messageId) ? ids : [...ids, messageId]))
+    setUnseen(ids => ids.filter(id => id !== messageId))
   }
 
   const visibleMessages = messages.filter((message) => !hiddenMessageIds.includes(message.id))

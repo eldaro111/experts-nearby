@@ -155,6 +155,14 @@ export function createBackend(tables, { userId, email = 'test@example.ru', rpc =
         for (const [key, raw] of u.searchParams) {
           if (['select', 'order', 'limit', 'offset', 'on_conflict', 'columns'].includes(key)) continue
           const value = String(raw)
+          if (strictQueries && table === 'project_messages' && key === 'or') {
+            // Only the chat's quoted (created_at,id) keyset, not a permissive no-op for this filter.
+            const cursor = /^\(created_at\.lt\."([^"]+)",and\(created_at\.eq\."([^"]+)",id\.lt\."([^"]+)"\)\)$/.exec(value)
+            if (!cursor || cursor[1] !== cursor[2]) throw new Error('Unsupported chat keyset filter')
+            const at = Date.parse(row.created_at), bound = Date.parse(cursor[1])
+            if (!(at < bound || at === bound && row.id < cursor[3])) return false
+            continue
+          }
           if (value === 'is.null') { if (row[key] !== null && row[key] !== undefined) return false; continue }
           if (value.startsWith('eq.')) {
             const expected = value.slice(3)

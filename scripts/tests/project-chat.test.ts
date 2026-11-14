@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { ProjectMessage } from '../../src/components/project/types'
-import { anchoredScrollTop, arrivedFromOthers, isNearBottom, isSendKey, mergeMessages, pendingOnly, type OutgoingMessage } from '../../src/lib/projectChat'
+import { anchoredScrollTop, arrivedFromOthers, compareMessages, isNearBottom, isSendKey, mergeMessages, pendingOnly, sameMessages, type OutgoingMessage } from '../../src/lib/projectChat'
 
 const message = (id: string, at: string, extra: Partial<ProjectMessage> = {}): ProjectMessage => ({
   id, project_id: 'P', author_id: 'A', body: id, created_at: at, parent_message_id: null, edited_at: null, is_deleted_for_all: false, ...extra,
@@ -47,4 +47,19 @@ test('only later messages of other members count as «new» below the view', () 
   const previous = [message('a', '2026-11-14T10:00:00Z'), message('b', '2026-11-14T10:01:00Z')]
   const next = [...previous, message('c', '2026-11-14T10:02:00Z', { author_id: 'B' }), message('d', '2026-11-14T10:03:00Z', { author_id: 'A' }), message('old', '2026-11-14T09:00:00Z', { author_id: 'B' })]
   assert.deepEqual(arrivedFromOthers(previous, next, 'A').map((m) => m.id), ['c'], 'own and older history are not «new»')
+})
+
+test('PostgreSQL microseconds precede UUID ordering, including equivalent timezone offsets', () => {
+  const earlier = message('z','2026-11-14T10:00:00.000001+00:00')
+  const later = message('a','2026-11-14T17:00:00.000002+07:00')
+  assert.ok(compareMessages(earlier,later)<0)
+  assert.deepEqual(mergeMessages([later],[earlier]).map(m=>m.id),['z','a'])
+})
+
+test('unchanged server reads do not ask the viewport to re-anchor; edits/deletions do', () => {
+  const a = message('a','2026-11-14T10:00:00Z')
+  assert.equal(sameMessages([a],[{...a}]),true)
+  assert.equal(sameMessages([a],[{...a,body:'edit'}]),false)
+  assert.equal(sameMessages([a],[{...a,is_deleted_for_all:true}]),false)
+  assert.equal(sameMessages([a],[]),false)
 })

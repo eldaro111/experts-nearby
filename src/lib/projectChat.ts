@@ -1,9 +1,7 @@
 // Pure helpers of the project chat (src/components/project/ProjectChat.tsx). No Supabase import.
 //
-// Server facts (baseline migration): project_messages rows are read/inserted/updated under RLS by
-// project members; a guard trigger checks membership, replies within the project and non-empty text.
-// The table is NOT in the supabase_realtime publication, so new messages of other members arrive only
-// when the chat reads again (on open, on focus/visibility and periodically while open).
+// Rows are read/inserted/updated under RLS. Realtime is an invalidation signal, never a second data
+// source. Polling/focus/reconnect also reconcile the loaded window through ordinary authorised reads.
 import type { ProjectMessage } from '@/components/project/types'
 
 export const CHAT_PAGE_SIZE = 50
@@ -23,13 +21,17 @@ export interface OutgoingMessage {
 }
 
 const time = (value: string) => {
+  if (value === 'infinity') return Infinity
+  if (value === '-infinity') return -Infinity
   const ms = Date.parse(value)
   return Number.isNaN(ms) ? 0 : ms
 }
+// PostgreSQL keeps microseconds. Date.parse alone collapses distinct timestamps into false UUID ties.
+const micros = (value: string) => Number((/\.(\d+)(?:Z|[+-]\d\d(?::?\d\d)?)$/.exec(value)?.[1] || '').padEnd(6, '0').slice(3, 6))
 
 /** Chronological order; the id breaks ties so the order is the same on every client. */
 export function compareMessages(a: Pick<ProjectMessage, 'created_at' | 'id'>, b: Pick<ProjectMessage, 'created_at' | 'id'>) {
-  return time(a.created_at) - time(b.created_at) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+  return time(a.created_at) - time(b.created_at) || micros(a.created_at) - micros(b.created_at) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
 }
 
 /**
@@ -40,6 +42,12 @@ export function mergeMessages(current: ProjectMessage[], incoming: ProjectMessag
   const byId = new Map(current.map((message) => [message.id, message]))
   for (const message of incoming) byId.set(message.id, message)
   return [...byId.values()].sort(compareMessages)
+}
+
+/** Unchanged reconciliation must not interrupt a smooth jump or move the reading anchor. */
+export function sameMessages(a: ProjectMessage[], b: ProjectMessage[]) {
+  const fields: (keyof ProjectMessage)[] = ['id', 'project_id', 'author_id', 'body', 'created_at', 'edited_at', 'parent_message_id', 'is_deleted_for_all']
+  return a.length === b.length && a.every((row, i) => fields.every(key => row[key] === b[i][key]))
 }
 
 /** Outgoing bubbles that are not on the server list yet (a confirmed row replaces its bubble). */
