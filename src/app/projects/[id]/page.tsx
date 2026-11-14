@@ -19,6 +19,8 @@ import { ProjectDocuments } from '@/components/project/ProjectDocuments'
 import { ProjectActivity } from '@/components/project/ProjectActivity'
 import { ProjectReviews } from '@/components/project/ProjectReviews'
 import { TaskDetails } from '@/components/project/TaskDetails'
+import { ProjectPlanning } from '@/components/project/planning/ProjectPlanning'
+import { usePlanning } from '@/components/project/planning/usePlanning'
 import { rememberCurrentProject } from '@/lib/myProjects'
 import { signInHref } from '@/lib/safeRedirect'
 import { useHashScroll } from '@/lib/useHashScroll'
@@ -280,6 +282,16 @@ export default function ProjectWorkspacePage() {
     }
   }
 
+  // ER-012 planning: one state for the planning section and the shared task card.
+  const planning = usePlanning({
+    enabled: !loading && hasAccess && Boolean(listing) && Boolean(user?.id),
+    projectId: id,
+    userId: user?.id ?? null,
+    ownerId: listing?.created_by ?? '',
+    closed: Boolean(listing?.completed_at),
+    onTasksChanged: refreshTasks,
+  })
+
   // /projects/[id]#plan and #materials arrive before the sections are loaded.
   useHashScroll(!loading && hasAccess && !tasksLoading)
 
@@ -407,6 +419,7 @@ export default function ProjectWorkspacePage() {
               tasks={tasks}
               tasksLoading={tasksLoading}
               onTasksChanged={refreshTasks}
+              onOpenTask={openTask}
             />
             </fieldset>
 
@@ -418,6 +431,16 @@ export default function ProjectWorkspacePage() {
               tasks={tasks}
               projectProgress={projectProgress}
               onTasksChanged={refreshTasks}
+              onOpenTask={openTask}
+            />
+          </section>
+
+          <section id="planning" className="scroll-mt-24">
+            <ProjectPlanning
+              planning={planning}
+              projectId={id}
+              members={members}
+              tasks={tasks}
               onOpenTask={openTask}
             />
           </section>
@@ -468,6 +491,7 @@ export default function ProjectWorkspacePage() {
         open={Boolean(openTaskId) && !tasksLoading}
         task={tasks.find((task) => task.id === openTaskId) || null}
         members={members}
+        planning={planning}
         onClose={closeTask}
         onShowOnBoard={(taskId) => { setRevealTaskId(taskId); closeTask() }}
       />

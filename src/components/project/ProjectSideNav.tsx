@@ -1,10 +1,11 @@
 'use client'
 
-import { LayoutDashboard, ListChecks, Fingerprint, FolderOpen, Star, History, MessagesSquare } from 'lucide-react'
+import { LayoutDashboard, ListChecks, Fingerprint, FolderOpen, Star, History, MessagesSquare, Layers } from 'lucide-react'
 
 const sections = [
   { href: '#project-top', title: 'Обзор', description: 'Прогресс и дедлайн', icon: LayoutDashboard },
   { href: '#plan', title: 'План работ', description: 'Задачи и календарь', icon: ListChecks },
+  { href: '#planning', title: 'Планирование', description: 'Режим, бэклог и спринты', icon: Layers },
   { href: '#contributions', title: 'Вклад', description: 'Работы и подтверждения', icon: Fingerprint },
   { href: '#materials', title: 'Материалы', description: 'Файлы и документы', icon: FolderOpen },
   { href: '#reviews', title: 'Отзывы', description: 'Оценки участников', icon: Star },

@@ -23,6 +23,8 @@ interface ProjectTasksProps {
   tasks: Task[]
   tasksLoading: boolean
   onTasksChanged: () => Promise<void>
+  /** Opens the shared task card (?task=<id>), where planning estimates are edited. */
+  onOpenTask?: (taskId: string) => void
 }
 
 export function ProjectTasks({
@@ -33,6 +35,7 @@ export function ProjectTasks({
   tasks,
   tasksLoading,
   onTasksChanged,
+  onOpenTask,
 }: ProjectTasksProps) {
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [newTaskDescription, setNewTaskDescription] = useState('')
@@ -972,6 +975,13 @@ export function ProjectTasks({
                         {task.description}
                       </div>
                     )}
+
+                    {(task.story_points != null || task.planned_hours != null) && (
+                      <div className="task-estimate">
+                        {task.story_points != null && <span>{task.story_points} SP</span>}
+                        {task.planned_hours != null && <span>{String(task.planned_hours).replace('.', ',')} ч</span>}
+                      </div>
+                    )}
                   </>
                 )}
 
@@ -1036,6 +1046,17 @@ export function ProjectTasks({
                     </div>
 
                     <div className="flex gap-2 mt-3 flex-wrap">
+                      {onOpenTask && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenTask(task.id)}
+                          className="bg-white border text-gray-800 text-xs px-3 py-1 rounded hover:bg-gray-100 transition"
+                          aria-label={`Карточка задачи «${task.title}»`}
+                        >
+                          Карточка
+                        </button>
+                      )}
+
                       {currentStatus !== 'todo' && (
                         <button
                           onClick={() =>

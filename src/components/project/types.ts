@@ -30,6 +30,12 @@ export interface Task {
   excuse_status: 'none' | 'pending' | 'approved' | 'rejected'
   excuse_decided_by: string | null
   excuse_decided_at: string | null
+
+  // ER-012 planning fields; absent until the planning migration is applied on the server.
+  stage_id?: string | null
+  story_points?: number | null
+  planned_hours?: number | null
+  planning_version?: number
 }
 
 export interface ProjectMember {

@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { boardStatusLabel } from '@/lib/taskLabels'
+import { TaskPlanningEditor } from './planning/TaskPlanningEditor'
+import type { PlanningController } from './planning/usePlanning'
 import type { ProjectMember, Task } from './types'
 
 const formatMoment = (value: string | null) =>
@@ -10,13 +12,14 @@ const formatMoment = (value: string | null) =>
 
 /**
  * One view of a task for every entry point (calendar, Gantt, direct link `?task=<id>`).
- * Read-only on purpose: status, dates and assignee are changed on the board card, so there is a
- * single place for edits and their conflict checks.
+ * Status, dates and assignee are changed on the board card, so there is a single place for those edits
+ * and their conflict checks. Planning estimates (ER-012) are edited here, with their own version check.
  */
 export function TaskDetails({
   open,
   task,
   members,
+  planning,
   onClose,
   onShowOnBoard,
 }: {
@@ -24,6 +27,8 @@ export function TaskDetails({
   /** null — the link points to a task that is not in this project (deleted or no access). */
   task: Task | null
   members: ProjectMember[]
+  /** Planning state of the page; omitted where planning is not shown. */
+  planning?: PlanningController
   onClose: () => void
   onShowOnBoard: (taskId: string) => void
 }) {
@@ -67,6 +72,8 @@ export function TaskDetails({
           {task.description
             ? <p className="task-details-description">{task.description}</p>
             : <p className="text-sm text-gray-500 mt-4">Описание не добавлено.</p>}
+
+          {planning && <TaskPlanningEditor key={task.id} task={task} planning={planning} />}
 
           <p className="text-xs text-gray-500 mt-4">Время — в часовом поясе устройства. Статус, сроки и исполнитель меняются в карточке на доске.</p>
         </>
