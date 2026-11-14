@@ -19,6 +19,7 @@ export function TaskPlanningEditor({ task, planning }: { task: Task; planning: P
   const id = useId()
   const fields = P.readTaskPlanning(task)
   const data = planning.data
+  const { inspect, status } = planning
   const [edit, setEdit] = useState<{ stage: string; points: string; hours: string; base: number } | null>(null)
   const [conflict, setConflict] = useState(false)
   const [notice, setNotice] = useState<Notice>(null)
@@ -27,14 +28,14 @@ export function TaskPlanningEditor({ task, planning }: { task: Task; planning: P
 
   // Actual hours for this task only; an answer for another task (or after closing) is ignored.
   useEffect(() => {
-    if (planning.status !== 'ready') return
+    if (status !== 'ready') return
     let current = true
-    void P.loadTaskActualHours(planning.db, task.id).then((result) => {
-      if (!current) return
+    void inspect((db) => P.loadTaskActualHours(db, task.id)).then((result) => {
+      if (!current || !result) return
       setActual(result.ok ? { taskId: task.id, hours: result.data.hours, count: result.data.contributions } : 'error')
     })
     return () => { current = false }
-  }, [planning.db, planning.status, task.id])
+  }, [inspect, status, task.id])
 
   if (planning.status === 'unavailable' || (planning.status === 'ready' && !fields)) {
     return <p className="planning-hint">{t('Оценки задач появятся после обновления базы данных на сервере.')}</p>
@@ -95,7 +96,7 @@ export function TaskPlanningEditor({ task, planning }: { task: Task; planning: P
               <label className="planning-field">
                 <span className="planning-label">{t('Этап')}</span>
                 <select value={edit.stage} onChange={(e) => setEdit({ ...edit, stage: e.target.value })}>
-                  <option value="">{t('Без этапа')}</option>
+                  <option value="" disabled={Boolean(fields.stage_id)}>{t('Без этапа')}</option>
                   {data.stages.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                 </select>
               </label>

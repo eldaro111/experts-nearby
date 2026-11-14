@@ -9,6 +9,8 @@ import { createNotification } from '@/lib/notifications'
 import { createProjectActivity } from '@/lib/projectActivity'
 import { logAppError, showAppMessage } from '@/lib/appFeedback'
 import { BOARD_COLUMNS, boardStatusLabel, isBoardStatus, saveTaskStatus, validateTaskRange } from '@/lib/taskSchedule'
+import * as P from '@/lib/planning'
+import type { PlanningController } from './planning/usePlanning'
 
 import type { ProjectMember, Task, TaskStatus } from './types'
 
@@ -25,6 +27,7 @@ interface ProjectTasksProps {
   onTasksChanged: () => Promise<void>
   /** Opens the shared task card (?task=<id>), where planning estimates are edited. */
   onOpenTask?: (taskId: string) => void
+  planning?: PlanningController
 }
 
 export function ProjectTasks({
@@ -36,6 +39,7 @@ export function ProjectTasks({
   tasksLoading,
   onTasksChanged,
   onOpenTask,
+  planning,
 }: ProjectTasksProps) {
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [newTaskDescription, setNewTaskDescription] = useState('')
@@ -66,14 +70,16 @@ export function ProjectTasks({
   const [boardAnnouncement, setBoardAnnouncement] = useState('')
   // React state holds only what changes the layout (which column is the target). The copy of the card
   // that follows the pointer is moved directly in the DOM, so pointer moves do not re-render the board.
-  const [drag, setDrag] = useState<{ taskId: string; title: string; from: string; over: TaskStatus | null; height: number } | null>(null)
+  const [drag, setDrag] = useState<{ taskId: string; title: string; from: string; over: string | null; height: number } | null>(null)
   const dragRef = useRef<{
-    taskId: string; title: string; from: string; over: TaskStatus | null
+    taskId: string; title: string; from: string; over: string | null
     ghost: HTMLElement; offsetX: number; offsetY: number; width: number; height: number
     x: number; y: number; frame: number
   } | null>(null)
   // FLIP: where the card was on screen before it is rendered in another place.
   const flipRef = useRef<{ taskId: string; rect: { left: number; top: number } } | null>(null)
+  const mounted = useRef(false)
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -84,8 +90,19 @@ export function ProjectTasks({
   }, [])
 
   const effectiveStatus = (task: Task): string => statusOverrides[task.id] ?? task.status
-  // Unknown statuses are shown in a separate section instead of being hidden.
-  const otherStatusTasks = tasks.filter((t) => !isBoardStatus(effectiveStatus(t)))
+  const stageBoard = Boolean(planning?.data && planning.data.settings.mode !== 'simple')
+  const boardEnabled = !planning || planning.status === 'unavailable' || (planning.status === 'ready' && planning.caps.canEditTasks && !planning.busy)
+  const columns: { key: string; label: string; status: string; stage?: P.ProjectStage }[] = stageBoard
+    ? (planning?.data?.stages ?? []).map((stage) => ({ key: stage.id, label: stage.name, status: P.stageStatus(stage), stage }))
+    : BOARD_COLUMNS.map((column) => ({ key: column.status, label: column.label, status: column.status }))
+  const effectiveColumn = (task: Task): string => {
+    if (!stageBoard) return effectiveStatus(task)
+    if (Object.hasOwn(statusOverrides, task.id)) return columns.find((c) => c.status === statusOverrides[task.id])?.key ?? 'unassigned'
+    return columns.find((c) => c.stage?.id === task.stage_id)?.key ?? 'unassigned'
+  }
+  const columnLabel = (key: string) => columns.find((c) => c.key === key)?.label ?? (stageBoard ? 'Без этапа' : boardStatusLabel(key))
+  // Never infer a legacy task's stage from its status for display or write it on read.
+  const otherStatusTasks = tasks.filter((task) => !columns.some((c) => c.key === effectiveColumn(task)))
 
   const cardElement = (taskId: string) => document.querySelector<HTMLElement>(`[data-task-card="${CSS.escape(taskId)}"]`)
 
@@ -387,13 +404,16 @@ export function ProjectTasks({
     await onTasksChanged()
   }
 
-  const handleChangeTaskStatus = async (taskId: string, status: TaskStatus) => {
+  const handleChangeTaskStatus = async (taskId: string, columnKey: string) => {
     const task = tasks.find((t) => t.id === taskId)
-    if (!task) return
+    const target = columns.find((c) => c.key === columnKey)
+    if (!task || !target || !boardEnabled) return
+    const status = target.status
     // One request per task at a time: repeated drops/clicks are ignored while saving.
     if (movingTaskIds.includes(taskId)) return
-    const from = effectiveStatus(task)
-    if (from === status) return
+    const from = effectiveColumn(task)
+    if (from === columnKey) return
+    if (stageBoard && (!planning || task.planning_version === undefined || !target.stage)) return
 
     // A drop has already stored the release point; buttons and the keyboard start from the card itself.
     if (flipRef.current?.taskId !== taskId) rememberCardPlace(taskId)
@@ -405,7 +425,17 @@ export function ProjectTasks({
       return next
     })
 
-    const result = await saveTaskStatus(task, status)
+    const saved = stageBoard && planning
+      ? await planning.perform(`board-${task.id}`, (db) => P.editTaskPlanning(db, task.id, task.planning_version!, {
+        stage_id: target.stage!.id, story_points: task.story_points ?? null, planned_hours: task.planned_hours ?? null,
+      }))
+      : null
+    if (!mounted.current) return
+    if (stageBoard && !saved) { clearOverride(); setMovingTaskIds((ids) => ids.filter((id) => id !== taskId)); return }
+    const result = stageBoard && saved
+      ? (saved.ok ? { ok: true as const } : { ok: false as const, message: saved.error.message, reason: saved.error.kind })
+      : await saveTaskStatus(task, status as TaskStatus)
+    if (!mounted.current) return
 
     if (!result.ok) {
       // The card visibly returns to its previous column.
@@ -414,8 +444,16 @@ export function ProjectTasks({
       setMovingTaskIds((ids) => ids.filter((id) => id !== taskId))
       logAppError('Ошибка обновления статуса задачи:', result.message)
       showAppMessage(result.message, 'error', 7000)
-      setBoardAnnouncement(`Задача «${task.title}» осталась в колонке «${boardStatusLabel(from)}». ${result.message}`)
-      if (result.reason === 'conflict') await onTasksChanged()
+      setBoardAnnouncement(`Задача «${task.title}» осталась в колонке «${columnLabel(from)}». ${result.message}`)
+      if (!stageBoard && result.reason === 'conflict') await onTasksChanged()
+      return
+    }
+
+    if (stageBoard) {
+      // Server triggers record history; perform already refreshed the shared tasks/settings.
+      setBoardAnnouncement(`Задача «${task.title}» перемещена в колонку «${target.label}».`)
+      clearOverride()
+      setMovingTaskIds((ids) => ids.filter((id) => id !== taskId))
       return
     }
 
@@ -456,10 +494,10 @@ export function ProjectTasks({
     setMovingTaskIds((ids) => ids.filter((id) => id !== taskId))
   }
 
-  const dropTargetAt = (x: number, y: number): TaskStatus | null => {
+  const dropTargetAt = (x: number, y: number): string | null => {
     const target = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-drop-status]')
     const status = target?.dataset.dropStatus || ''
-    return isBoardStatus(status) ? status : null
+    return boardEnabled && columns.some((c) => c.key === status) ? status : null
   }
 
   const placeGhost = (active: NonNullable<typeof dragRef.current>) => {
@@ -475,7 +513,7 @@ export function ProjectTasks({
   }
 
   const handleGripPointerDown = (event: ReactPointerEvent<HTMLButtonElement>, task: Task) => {
-    if (event.button !== 0 || movingTaskIds.includes(task.id) || dragRef.current) return
+    if (!boardEnabled || event.button !== 0 || movingTaskIds.includes(task.id) || dragRef.current) return
     const card = event.currentTarget.closest<HTMLElement>('[data-task-card]')
     if (!card) return
     // Stop text selection / native drag, which would otherwise cancel the pointer stream.
@@ -497,7 +535,7 @@ export function ProjectTasks({
     ghost.style.height = `${rect.height}px`
 
     const active = {
-      taskId: task.id, title: task.title, from: effectiveStatus(task), over: null as TaskStatus | null,
+      taskId: task.id, title: task.title, from: effectiveColumn(task), over: null as string | null,
       ghost, offsetX: event.clientX - rect.left, offsetY: event.clientY - rect.top, width: rect.width, height: rect.height,
       x: event.clientX, y: event.clientY, frame: 0,
     }
@@ -552,13 +590,13 @@ export function ProjectTasks({
   const handleGripKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, task: Task) => {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
     event.preventDefault()
-    if (movingTaskIds.includes(task.id)) return
+    if (!boardEnabled || movingTaskIds.includes(task.id)) return
     refocusGripRef.current = task.id
-    const from = effectiveStatus(task)
-    const index = BOARD_COLUMNS.findIndex((column) => column.status === from)
+    const from = effectiveColumn(task)
+    const index = columns.findIndex((column) => column.key === from)
     const nextIndex = index < 0 ? 0 : index + (event.key === 'ArrowRight' ? 1 : -1)
-    const target = BOARD_COLUMNS[nextIndex]
-    if (target) void handleChangeTaskStatus(task.id, target.status)
+    const target = columns[nextIndex]
+    if (target) void handleChangeTaskStatus(task.id, target.key)
   }
 
   const handleChangeTaskAssignee = async (taskId: string, assigneeId: string) => {
@@ -839,7 +877,8 @@ export function ProjectTasks({
     title: string,
     columnTasks: Task[],
     status: string,
-    droppable = true
+    droppable = true,
+    stage?: P.ProjectStage,
   ) => {
     const isTarget = Boolean(drag && droppable && drag.over === status && drag.from !== status)
     // The order inside a column is the board's own (newest first), not the drop point, so the
@@ -851,9 +890,17 @@ export function ProjectTasks({
     <section
       className={`task-column border rounded-xl bg-white p-5 shadow-sm ${isTarget ? 'is-drop-target' : ''}`}
       data-drop-status={droppable ? status : undefined}
+      data-stage-id={stage?.id}
       aria-label={`${title}: ${columnTasks.length}`}
     >
       <h2 className="text-xl font-semibold mb-4 flex items-baseline justify-between gap-2"><span>{title}</span><span className="text-sm font-normal text-gray-500">{columnTasks.length}</span></h2>
+      {stage && planning?.data && (() => {
+        const wip = P.wipState(stage, tasks, planning.data.settings)
+        return <div className="mb-3 text-sm">
+          {wip.applies && <p className={wip.over ? 'text-amber-800' : 'text-gray-600'}>WIP: {wip.count} / {wip.limit} · {wip.strict ? 'строгий' : 'мягкий'}{wip.over ? ' · превышен' : ''}</p>}
+          {stage.policy && <p className="whitespace-pre-wrap text-gray-600">{stage.policy}</p>}
+        </div>
+      })()}
 
       {shownTasks.length === 0 ? (
         <p className="text-sm text-gray-500">{droppable ? 'Пока пусто. Перетащите сюда задачу.' : 'Пока пусто.'}</p>
@@ -1057,6 +1104,14 @@ export function ProjectTasks({
                         </button>
                       )}
 
+                      {stageBoard ? (
+                        <label className="text-xs w-full">Этап задачи
+                          <select className="border rounded p-2 w-full bg-white" aria-label={`Этап задачи «${task.title}»`} value={effectiveColumn(task)} disabled={isMoving || !boardEnabled} onChange={(event) => void handleChangeTaskStatus(task.id, event.target.value)}>
+                            <option value="unassigned" disabled>Без этапа</option>
+                            {columns.map((column) => <option key={column.key} value={column.key}>{column.label}</option>)}
+                          </select>
+                        </label>
+                      ) : <>
                       {currentStatus !== 'todo' && (
                         <button
                           onClick={() =>
@@ -1092,6 +1147,7 @@ export function ProjectTasks({
                           Готово
                         </button>
                       )}
+                      </>}
 
                       {isTaskOverdue(task) &&
                         task.assignee_id === currentUserId &&
@@ -1246,14 +1302,14 @@ export function ProjectTasks({
             Перетащите задачу за значок слева от названия в другую колонку — за указателем движется вся карточка. С клавиатуры: фокус на значке и стрелки влево/вправо, Escape отменяет перенос. Кнопки статуса в карточке тоже работают.
           </p>
           <div className={`task-board grid gap-6 md:grid-cols-3 ${drag ? 'is-dragging' : ''}`}>
-            {BOARD_COLUMNS.map((column) => (
-              <div key={column.status}>{renderTaskColumn(column.label, tasks.filter((t) => effectiveStatus(t) === column.status), column.status)}</div>
+            {columns.map((column) => (
+              <div key={column.key}>{renderTaskColumn(column.label, tasks.filter((task) => effectiveColumn(task) === column.key), column.key, true, column.stage)}</div>
             ))}
           </div>
           {otherStatusTasks.length > 0 && (
             <div className="mt-6">
-              {renderTaskColumn('Другие статусы', otherStatusTasks, 'other', false)}
-              <p className="text-xs text-gray-500 mt-2">У этих задач статус, которого нет на доске. Он сохранён без изменений; перенесите задачу в колонку, если нужно.</p>
+              {renderTaskColumn(stageBoard ? 'Без этапа' : 'Другие статусы', otherStatusTasks, 'other', false)}
+              <p className="text-xs text-gray-500 mt-2">{stageBoard ? 'Этап этим задачам не назначен. Существующие статусы сохранены; выберите этап явно, если нужно.' : 'У этих задач статус, которого нет на доске. Он сохранён без изменений; перенесите задачу в колонку, если нужно.'}</p>
             </div>
           )}
         </>

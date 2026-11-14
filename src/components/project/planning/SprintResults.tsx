@@ -37,7 +37,8 @@ export function SprintResults({ sprint, sprints, planning, members }: { sprint: 
 
   const loadEvents = async () => {
     setEvents({ status: 'loading' })
-    const result = await P.loadSprintEvents(planning.db, sprint.id)
+    const result = await planning.inspect((db) => P.loadSprintEvents(db, sprint.id))
+    if (!result) return
     setEvents(result.ok ? { status: 'ready', list: result.data } : { status: 'error' })
   }
 

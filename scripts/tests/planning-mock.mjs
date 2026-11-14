@@ -11,7 +11,8 @@ import { randomUUID } from 'node:crypto'
 
 const TABLES = ['project_planning', 'project_roles', 'project_stages', 'project_backlogs', 'project_sprints', 'project_sprint_items', 'project_sprint_events']
 const RPCS = new Set(['update_project_planning', 'set_project_role', 'upsert_project_stage', 'archive_project_stage', 'edit_task_planning', 'get_project_backlog',
-  'reorder_project_backlog', 'create_project_sprint', 'update_project_sprint', 'add_tasks_to_sprint', 'remove_task_from_sprint', 'start_project_sprint', 'close_project_sprint'])
+  'reorder_project_backlog', 'create_project_sprint', 'update_project_sprint', 'add_tasks_to_sprint', 'remove_task_from_sprint', 'start_project_sprint', 'close_project_sprint',
+  'replace_project_lead', 'reorder_project_stages', 'create_project_sprint_once', 'close_project_sprint_once', 'get_project_planning_request'])
 const STATUS = { PT409: 409, 42501: 403, 23514: 400, 23505: 409, P0001: 400 }
 
 class ApiError extends Error {
@@ -24,6 +25,7 @@ const now = () => new Date().toISOString()
 export function createPlanningMock(tables, { installed = true, sprintsInstalled = true } = {}) {
   for (const name of TABLES) tables[name] ||= []
   let eventId = 0
+  const receipts = new Map()
   const mock = {
     tables,
     calls: [],
@@ -123,10 +125,6 @@ export function createPlanningMock(tables, { installed = true, sprintsInstalled 
         const make = (name, position, category) => ({ id: randomUUID(), project_id: a.p_project_id, name, position, category, status_value: null, policy: '', wip_limit: null, archived_at: null, version: 1 })
         const created = [make('К выполнению', 0, 'todo'), make('В работе', 1, 'doing'), make('Готово', 2, 'done')]
         tables.project_stages.push(...created)
-        for (const t of tables.tasks.filter((t) => t.project_id === a.p_project_id)) {
-          const match = created.find((s) => s.category === t.status)
-          if (match) { t.stage_id = match.id; bumpTask(t) }
-        }
       }
       return clone(v)
     },
@@ -143,6 +141,42 @@ export function createPlanningMock(tables, { installed = true, sprintsInstalled 
       } else tables.project_roles = tables.project_roles.filter((r) => !(r.project_id === a.p_project_id && r.user_id === a.p_user_id && r.role === a.p_role))
       v.version += 1
       return clone(v)
+    },
+    replace_project_lead(a, user) {
+      lock(a.p_project_id, user)
+      if (listing(a.p_project_id).created_by !== user) fail('42501', 'Роли назначает автор проекта.')
+      const v = planningVersion(a.p_project_id, a.p_expected_planning_version)
+      if (!['product_owner', 'scrum_master'].includes(a.p_role)) fail('23514', 'Недопустимая роль.')
+      if (a.p_user_id && !isMember(a.p_project_id, a.p_user_id)) fail('23514', 'Роль требует действующего членства.')
+      const previous = tables.project_roles.find((r) => r.project_id === a.p_project_id && r.role === a.p_role)
+      if ((previous?.user_id ?? null) === a.p_user_id) return clone(v)
+      tables.project_roles = tables.project_roles.filter((r) => !(r.project_id === a.p_project_id && r.role === a.p_role))
+      if (a.p_user_id) tables.project_roles.push({ project_id: a.p_project_id, role: a.p_role, user_id: a.p_user_id })
+      v.version += 1
+      return clone(v)
+    },
+    reorder_project_stages(a, user) {
+      lock(a.p_project_id, user, true)
+      const v = planningVersion(a.p_project_id, a.p_expected_planning_version)
+      const stages = tables.project_stages.filter((s) => s.project_id === a.p_project_id && !s.archived_at).sort((a,b) => a.position-b.position)
+      if (a.p_stage_ids.length !== stages.length || new Set(a.p_stage_ids).size !== stages.length || stages.some((s) => !a.p_stage_ids.includes(s.id))) fail('PT409', 'Состав этапов изменился.')
+      if (a.p_stage_ids.join() === stages.map((s) => s.id).join()) return clone(v)
+      for (const s of stages) { s.position = a.p_stage_ids.indexOf(s.id); s.version += 1 }
+      v.version += 1
+      return clone(v)
+    },
+    get_project_planning_request(a, user) {
+      if (!isMember(a.p_project_id, user)) fail('42501', 'Проект недоступен.')
+      const receipt = receipts.get(a.p_request_id)
+      if (!receipt) return null
+      if (receipt.actor_id !== user || receipt.project_id !== a.p_project_id) fail('42501', 'Запрос недоступен.')
+      return clone(receipt)
+    },
+    create_project_sprint_once(a, user) { return once(a, user, 'create_sprint', a.p_project_id, 'create_project_sprint') },
+    close_project_sprint_once(a, user) {
+      const s = tables.project_sprints.find((s) => s.id === a.p_sprint_id)
+      if (!s) fail('PT409', 'Спринт недоступен.')
+      return once(a, user, 'close_sprint', s.project_id, 'close_project_sprint')
     },
     upsert_project_stage(a, user) {
       lock(a.p_project_id, user, true)
@@ -190,10 +224,12 @@ export function createPlanningMock(tables, { installed = true, sprintsInstalled 
       if ((t.stage_id ?? null) === a.p_stage_id && (t.story_points ?? null) === a.p_story_points && (t.planned_hours ?? null) === a.p_planned_hours) return clone(t)
       if (a.p_stage_id && a.p_stage_id !== t.stage_id) {
         const s = stage(a.p_stage_id)
+        if (!s || s.archived_at || s.project_id !== t.project_id) fail('23514', 'Этап недоступен.')
         const planning = settingsOf(t.project_id)
         if (planning?.mode !== 'simple' && planning?.wip_mode === 'strict' && s.wip_limit !== null && effective(s) !== 'done'
           && tables.tasks.filter((x) => x.stage_id === s.id && x.id !== t.id && x.status !== 'done').length >= s.wip_limit) fail('23514', 'Превышен строгий WIP-лимит этапа.')
         t.status = effective(s)
+        t.completed_at = t.status === 'done' ? t.completed_at ?? now() : null
       }
       Object.assign(t, { stage_id: a.p_stage_id, story_points: a.p_story_points, planned_hours: a.p_planned_hours })
       bumpTask(t)
@@ -321,6 +357,18 @@ export function createPlanningMock(tables, { installed = true, sprintsInstalled 
     },
   }
 
+  function once(a, user, kind, project, fn) {
+    lock(project, user, true)
+    const previous = receipts.get(a.p_request_id)
+    if (previous) {
+      if (previous.actor_id !== user || previous.project_id !== project || previous.kind !== kind || JSON.stringify(previous.args) !== JSON.stringify(a)) fail('22023', 'Идентификатор запроса уже использован с другими параметрами.')
+      return clone(previous.result)
+    }
+    const result = rpc[fn](a, user)
+    receipts.set(a.p_request_id, { request_id: a.p_request_id, project_id: project, actor_id: user, kind, result: clone(result), args: clone(a) })
+    return result
+  }
+
   const userOf = (req) => {
     const token = (req.headers().authorization || '').replace(/^Bearer\s+/i, '')
     try { return JSON.parse(Buffer.from(token.split('.')[1] || '', 'base64url').toString()).sub || null } catch { return null }
@@ -357,14 +405,20 @@ export function createPlanningMock(tables, { installed = true, sprintsInstalled 
     }
     const fault = mock.faults.find((f) => f.fn === name)
     if (fault) mock.faults.splice(mock.faults.indexOf(fault), 1)
+    fault?.entered?.()
+    if (fault?.hold) await fault.hold
     if (fault?.delayMs) await new Promise((resolve) => setTimeout(resolve, fault.delayMs))
     if (isRpc) {
       const args = req.postDataJSON() || {}
       mock.calls.push({ fn: name, user, args })
       try {
+        if (fault?.code) fail(fault.code, fault.message ?? 'Synthetic server refusal')
+        if (fault?.mode === 'null') return respond(route, 200, null)
         const data = rpc[name](args, user)
         if (fault?.mode === 'drop') return route.abort('failed')
-        return respond(route, 200, data)
+        const response = await respond(route, 200, data)
+        fault?.delivered?.()
+        return response
       } catch (error) {
         if (!(error instanceof ApiError)) throw error
         return respond(route, STATUS[error.code] || 400, { code: error.code, message: error.message, details: null, hint: null })

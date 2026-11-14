@@ -1,5 +1,16 @@
 // Interface text only. User messages, project descriptions and legal documents are not sent to a translation service.
 export const english: Record<string, string> = {
+  'Закрытие подтверждено по идентификатору операции. Показаны сохранённые итоги.': 'Closure confirmed by the operation ID. Saved results are shown.',
+  'Результат закрытия пока неизвестен. Отсутствие подтверждения не означает отказ. Можно проверить снова или явно повторить тот же запрос.': 'The closure outcome is still unknown. Missing confirmation does not mean rejection. Check again or explicitly retry the same request.',
+  'Запрос уже отправлялся. Его решения и версия сохранены; повтор использует тот же идентификатор.': 'This request has already been sent. Its decisions and version are retained; a retry uses the same ID.',
+  'На сервере спринт закрыт. Это само по себе не подтверждает результат именно Вашего запроса.': 'The sprint is closed on the server. This alone does not confirm the outcome of your particular request.',
+  'Проверить результат закрытия': 'Check closure outcome',
+  'Повторить тот же запрос': 'Retry the same request',
+  'Сохранён незавершённый запрос создания. Проверьте его результат или повторите тот же запрос.': 'A pending creation request is saved. Check its outcome or retry the same request.',
+  'Создание подтверждено по идентификатору операции. Повторный спринт не создавался.': 'Creation confirmed by the operation ID. No duplicate sprint was created.',
+  'Результат создания пока неизвестен. Можно проверить снова или явно повторить тот же запрос без дубля.': 'The creation outcome is still unknown. Check again or explicitly retry the same request without creating a duplicate.',
+  'Проверить результат создания': 'Check creation outcome',
+  'Закрыть форму': 'Close form',
   Главная: 'Home',
   Проекты: 'Projects',
   Эксперты: 'Experts',

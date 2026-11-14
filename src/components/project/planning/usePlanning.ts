@@ -41,7 +41,9 @@ export interface PlanningController {
   caps: P.PlanningCapabilities
   db: P.PlanningDb
   userId: string | null
-  refresh: () => Promise<void>
+  refresh: () => Promise<boolean>
+  /** Read-only follow-up bound to this project/session; stale answers return null. */
+  inspect: <T>(operation: (db: P.PlanningDb) => Promise<P.Result<T>>) => Promise<P.Result<T> | null>
   /**
    * Runs one write. Afterwards the planning data and the project tasks are read again (also after a
    * conflict, a refusal or an unknown outcome). Returns null when the answer was dropped because the
@@ -66,20 +68,25 @@ export function usePlanning({ enabled, projectId, userId, ownerId, closed, onTas
   const [refreshing, setRefreshing] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const generation = useRef(0)
+  const readSequence = useRef(0)
+  const active = useRef(false)
   const busyRef = useRef(false)
   const tasksChanged = useRef(onTasksChanged)
   useEffect(() => { tasksChanged.current = onTasksChanged }, [onTasksChanged])
 
   const load = useCallback(async (my: number, stateKey: string) => {
+    if (!active.current || my !== generation.current) return
+    const readId = ++readSequence.current
+    const currentRead = () => active.current && my === generation.current && readId === readSequence.current
     setRefreshing(true)
     const db = planningDb
     const [settings, roles, stages, backlog, sprints] = await Promise.all([
       P.loadSettings(db, projectId), P.loadRoles(db, projectId), P.loadStages(db, projectId),
       P.loadBacklog(db, projectId), P.loadSprints(db, projectId),
     ])
-    if (my !== generation.current) return
+    if (!currentRead()) return
     const keep = (patch: Partial<State>) => setState((before) => ({ ...(before.key === stateKey ? before : { key: stateKey, data: null, error: null, status: 'loading' as const }), ...patch }))
-    const finish = () => { if (my === generation.current) setRefreshing(false) }
+    const finish = () => { if (currentRead()) setRefreshing(false) }
 
     if (!settings.ok && settings.error.kind === 'unavailable') { keep({ status: 'unavailable', data: null, error: null }); finish(); return }
     if (!backlog.ok && backlog.error.kind === 'forbidden') { keep({ status: 'forbidden', data: null, error: null }); finish(); return }
@@ -103,7 +110,7 @@ export function usePlanning({ enabled, projectId, userId, ownerId, closed, onTas
     const sprintList = sprints.ok ? sprints.data : []
     const openIds = sprintList.filter((s) => s.state === 'planned' || s.state === 'active').map((s) => s.id)
     const items = sprintsMissing ? { ok: true as const, data: [] } : await P.loadOpenItems(db, openIds)
-    if (my !== generation.current) return
+    if (!currentRead()) return
     if (!items.ok) {
       setState((before) => (before.key === stateKey && before.data ? { ...before, error: items.error } : { key: stateKey, status: 'error', data: null, error: items.error }))
       finish()
@@ -131,10 +138,11 @@ export function usePlanning({ enabled, projectId, userId, ownerId, closed, onTas
   useEffect(() => {
     generation.current += 1
     const my = generation.current
+    active.current = key !== 'off'
     busyRef.current = false
     if (key === 'off') return
     const timer = window.setTimeout(() => { setBusy(null); void load(my, key) }, 0)
-    return () => { window.clearTimeout(timer); generation.current += 1 }
+    return () => { window.clearTimeout(timer); active.current = false; generation.current += 1 }
   }, [key, load])
 
   // Another tab or a sign-out may change the account while this page stays open.
@@ -143,6 +151,7 @@ export function usePlanning({ enabled, projectId, userId, ownerId, closed, onTas
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       const id = session?.user?.id ?? null
       if (id === userId) return
+      active.current = false
       generation.current += 1
       busyRef.current = false
       setBusy(null)
@@ -153,26 +162,27 @@ export function usePlanning({ enabled, projectId, userId, ownerId, closed, onTas
   }, [key, userId])
 
   const refresh = useCallback(async () => {
-    if (state.status === 'session_changed') return
+    if (!active.current || state.status === 'session_changed') return false
     const my = generation.current
     await Promise.all([load(my, key), tasksChanged.current()])
+    return active.current && my === generation.current
   }, [key, load, state.status])
 
   const perform = useCallback(async <T,>(label: string, operation: (db: P.PlanningDb) => Promise<P.Result<T>>): Promise<P.Result<T> | null> => {
-    if (busyRef.current) return null
+    if (!active.current || busyRef.current) return null
     const my = generation.current
     busyRef.current = true
     setBusy(label)
     try {
       const result = await operation(planningDb)
-      if (my !== generation.current) return null
+      if (!active.current || my !== generation.current) return null
       if (!result.ok && result.error.kind === 'unavailable') {
         setState({ key, status: 'unavailable', data: null, error: null })
         return result
       }
       // Success, conflict, refusal or unknown outcome: show what the server has now.
       await Promise.all([load(my, key), tasksChanged.current()])
-      return my === generation.current ? result : null
+      return active.current && my === generation.current ? result : null
     } finally {
       if (my === generation.current) {
         busyRef.current = false
@@ -181,10 +191,17 @@ export function usePlanning({ enabled, projectId, userId, ownerId, closed, onTas
     }
   }, [key, load])
 
+  const inspect = useCallback(async <T,>(operation: (db: P.PlanningDb) => Promise<P.Result<T>>) => {
+    if (!active.current) return null
+    const my = generation.current
+    const result = await operation(planningDb)
+    return active.current && my === generation.current ? result : null
+  }, [])
+
   const current = state.key === key ? state : { key, status: 'loading' as const, data: null, error: null }
   const caps = useMemo(() => (current.status === 'ready' && current.data
     ? P.capabilities({ userId, ownerId, closed, settings: current.data.settings, roles: current.data.roles })
     : NO_RIGHTS), [current.status, current.data, userId, ownerId, closed])
 
-  return { status: current.status, data: current.data, error: current.error, refreshing, busy, caps, db: planningDb, userId, refresh, perform }
+  return { status: current.status, data: current.data, error: current.error, refreshing, busy, caps, db: planningDb, userId, refresh, perform, inspect }
 }

@@ -8,6 +8,7 @@
 //
 // Run: node --import tsx scripts/tests/planning-client-db.mjs
 import assert from 'node:assert/strict'
+import { randomUUID } from 'node:crypto'
 import { setup, owner, member, stranger, checks, planningMigration, sprintMigration } from './planning-db-helpers.mjs'
 import * as P from '../../src/lib/planning.ts'
 
@@ -78,6 +79,23 @@ const { q, user, admin } = env
 const db = pgliteDb(q)
 const taskRow = async (id) => P.parseTask((await q('select to_jsonb(t) as row from tasks t where id=$1', [id]))[0].row)
 try {
+  if (process.argv.includes('--integration')) await check('integration client: atomic order/lead and exact create/close receipts match named SQL arguments', async () => {
+    const p = await env.project()
+    let s = ok(await P.saveSettings(db,p,0,{mode:'scrum',goal:'',definition_of_done:'',wip_mode:'soft',delegate_to_roles:false}),'settings')
+    s = ok(await P.replaceLead(db,p,s.version,'product_owner',member),'lead')
+    const ids = ok(await P.loadStages(db,p),'stages').map((x) => x.id).reverse()
+    s = ok(await P.reorderStages(db,p,s.version,ids),'order')
+    assert.deepEqual(ok(await P.loadStages(db,p),'order read').map((x) => x.id),ids)
+    const request = {requestId:randomUUID(),projectId:p,expectedVersion:s.version,draft:{name:'Exact request',goal:'',start_at:null,end_at:null}}
+    const created = ok(await P.createSprintOnce(db,request),'create once')
+    assert.deepEqual(ok(await P.createSprintOnce(db,request),'replay'),created)
+    assert.equal(ok(await P.loadRequest(db,p,request.requestId),'receipt').result.id,created.id)
+    const close = {requestId:randomUUID(),sprintId:created.id,expectedVersion:created.version,close:{cancel:true,reason:'Synthetic cancellation',decisions:[]}}
+    const closed = ok(await P.closeSprintOnce(db,close),'close once')
+    assert.deepEqual(ok(await P.closeSprintOnce(db,close),'close replay'),closed)
+    assert.deepEqual(ok(await P.loadRequest(db,p,close.requestId),'close receipt').result,closed)
+    assert.equal(ok(await P.loadRequest(db,p,randomUUID()),'missing receipt'),null)
+  })
   const p = await env.project()
   const a = await env.task(p, { status: 'todo' })
   const b = await env.task(p, { status: 'doing' })

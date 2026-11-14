@@ -1,9 +1,10 @@
 'use client'
 
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useLocale, useT } from '@/components/LocaleProvider'
 import { Modal } from '@/components/ui/Modal'
 import * as P from '@/lib/planning'
+import { storePending, clearPending } from '@/lib/planningPending'
 import { boardStatusLabel } from '@/lib/taskLabels'
 import type { Task } from '../types'
 import { formatHours, formatPoints, sprintTitle } from './text'
@@ -17,9 +18,10 @@ import type { PlanningController, PlanningData } from './usePlanning'
  * After a timeout the sprint is read again: the result is shown as it is on the server, never re-sent
  * automatically.
  */
-export function SprintCloseDialog({ sprint, cancel, planning, data, projectId, tasks, onClose, onClosed }: {
+export function SprintCloseDialog({ sprint, cancel, initialRequest, planning, data, projectId, tasks, onClose, onClosed }: {
   sprint: P.Sprint
   cancel: boolean
+  initialRequest: P.CloseSprintRequest | null
   planning: PlanningController
   data: PlanningData
   projectId: string
@@ -30,10 +32,13 @@ export function SprintCloseDialog({ sprint, cancel, planning, data, projectId, t
   const t = useT()
   const locale = useLocale()
   const id = useId()
-  const [step, setStep] = useState<'decide' | 'review'>('decide')
-  const [choices, setChoices] = useState<Record<string, string>>({})
-  const [reason, setReason] = useState('')
+  const [step, setStep] = useState<'decide' | 'review'>(initialRequest ? 'review' : 'decide')
+  const [choices, setChoices] = useState<Record<string, string>>(() => Object.fromEntries((initialRequest?.close.decisions ?? []).map((d) => [d.task_id, d.destination === 'backlog' ? 'backlog' : d.sprint_id])))
+  const [reason, setReason] = useState(initialRequest?.close.reason ?? '')
+  const [pending, setPending] = useState<P.CloseSprintRequest | null>(initialRequest)
   const [notice, setNotice] = useState<Notice>(null)
+  const live = useRef(false)
+  useEffect(() => { live.current = true; return () => { live.current = false } }, [])
   const notEstimated = t('Не оценено')
 
   const scope = data.openItems.filter((item) => item.sprint_id === sprint.id)
@@ -42,7 +47,7 @@ export function SprintCloseDialog({ sprint, cancel, planning, data, projectId, t
   const unfinished = P.unfinishedScope(scope, sprint.id, tasks)
   const done = scopeTasks.filter((task) => task.status === 'done')
   const planned = data.sprints.filter((item) => item.state === 'planned' && item.id !== sprint.id)
-  const decided = P.buildDecisions(choices, unfinished.map((task) => task.id), planned)
+  const decided: P.Check<P.CloseDecision[]> = pending ? { ok: true, value: pending.close.decisions } : P.buildDecisions(choices, unfinished.map((task) => task.id), planned)
   const sprintName = (sprintId: string) => {
     const target = data.sprints.find((item) => item.id === sprintId)
     return target ? sprintTitle(target, t) : t('Спринт')
@@ -60,36 +65,43 @@ export function SprintCloseDialog({ sprint, cancel, planning, data, projectId, t
 
   const confirm = async () => {
     if (!decided.ok) { setStep('decide'); return }
-    const startedAt = P.requestMoment()
-    const result = await planning.perform('close', (db) => P.closeSprint(db, sprint.id, sprint.version, { cancel, reason: reason.trim() || null, decisions: decided.value }))
-    if (!result) return
+    const request = pending ?? { requestId: crypto.randomUUID(), sprintId: sprint.id, expectedVersion: sprint.version, close: { cancel, reason: reason.trim() || null, decisions: decided.value } }
+    setPending(request); storePending(planning.userId!, projectId, request)
+    const result = await planning.perform('close', (db) => P.closeSprintOnce(db, request))
+    if (!live.current || !result) return
     if (result.ok) {
+      clearPending(planning.userId!, projectId, request)
       onClosed(result.data, { tone: 'success', text: cancel ? 'Спринт отменён. Итоги сохранены.' : 'Спринт завершён. Итоги сохранены.' })
       return
     }
-    if (result.error.kind === 'timeout' || result.error.kind === 'network') {
-      // The outcome is unknown: read the sprint again instead of sending the same request twice.
-      const check = await P.loadSprints(planning.db, projectId)
-      const now = check.ok ? check.data.find((item) => item.id === sprint.id) : undefined
-      if (now && (now.state === 'completed' || now.state === 'cancelled') && now.closed_at && new Date(now.closed_at).getTime() >= startedAt - 120_000) {
-        onClosed(now, { tone: 'info', text: 'Ответ сервера не дошёл, но спринт уже закрыт: показаны сохранённые итоги. Повторно запрос не отправлялся.' })
-        return
-      }
-      setStep('review')
-      setNotice({ tone: 'warning', text: now ? 'Сервер не подтвердил закрытие: спринт не закрыт. Проверьте решения и отправьте ещё раз, если нужно.' : 'Не удалось проверить результат. Обновите данные, прежде чем повторять.' })
+    if (P.uncertainWrite(result.error)) {
+      await checkClosure(request)
       return
     }
+    clearPending(planning.userId!, projectId, request); setPending(null)
     setStep('decide')
     setNotice(result.error.kind === 'conflict'
       ? { tone: 'warning', text: 'Спринт, его состав или целевой спринт изменились. Показаны актуальные данные — проверьте решения и подтвердите снова.', detail: result.error.message }
       : errorNotice(result.error))
   }
 
+  const checkClosure = async (request: P.CloseSprintRequest) => {
+    const check = await planning.inspect((db) => P.loadRequest(db, projectId, request.requestId))
+    if (!live.current || !check) return
+    if (check.ok && check.data?.kind === 'close_sprint' && check.data.actor_id === planning.userId && check.data.result.id === sprint.id) {
+      clearPending(planning.userId!, projectId, request)
+      onClosed(check.data.result, { tone: 'info', text: 'Закрытие подтверждено по идентификатору операции. Показаны сохранённые итоги.' })
+      await planning.refresh()
+    } else {
+      setNotice({ tone: 'warning', text: 'Результат закрытия пока неизвестен. Отсутствие подтверждения не означает отказ. Можно проверить снова или явно повторить тот же запрос.' })
+    }
+  }
+
   const setAll = (value: string) => { setNotice(null); setChoices(Object.fromEntries(unfinished.map((task) => [task.id, value]))) }
   const title = `${t(cancel ? 'Отмена спринта' : 'Завершение спринта')}: ${sprint.name}`
 
   return (
-    <Modal open onClose={onClose} className="planning-dialog" title={title} description={t(step === 'decide' ? 'Шаг 1 из 2: решение по каждой незавершённой задаче' : 'Шаг 2 из 2: проверьте итог')}>
+    <Modal open onClose={() => { if (!planning.busy) onClose() }} className="planning-dialog" title={title} description={t(step === 'decide' ? 'Шаг 1 из 2: решение по каждой незавершённой задаче' : 'Шаг 2 из 2: проверьте итог')}>
       {step === 'decide' ? (
         <div className="planning-dialog-body">
           <p className="planning-hint">{t('Выполненные задачи останутся в итогах спринта. Для каждой незавершённой задачи выберите, куда она пойдёт. Статусы задач не меняются.')}</p>
@@ -142,12 +154,15 @@ export function SprintCloseDialog({ sprint, cancel, planning, data, projectId, t
           </dl>
           <p className="planning-hint">{t('Суммы показаны по текущим оценкам. Окончательный итог сохранит сервер в момент закрытия; позже он не изменится, даже если задачи отредактируют или удалят.')}</p>
           {cancel && <p className="planning-hint">{t('Отменённый спринт хранится отдельно и не учитывается как выполненный.')}</p>}
+          {pending && <p className="planning-warning">{t('Запрос уже отправлялся. Его решения и версия сохранены; повтор использует тот же идентификатор.')}</p>}
+          {(sprint.state === 'completed' || sprint.state === 'cancelled') && <p className="planning-hint">{t('На сервере спринт закрыт. Это само по себе не подтверждает результат именно Вашего запроса.')}</p>}
           <NoticeBox notice={notice} />
           <div className="planning-actions">
+            {pending && <button type="button" className="action-secondary planning-button" disabled={Boolean(planning.busy)} onClick={() => void checkClosure(pending)}>{t('Проверить результат закрытия')}</button>}
             <button type="button" className="action-primary planning-button" disabled={Boolean(planning.busy)} onClick={() => void confirm()}>
-              {t(planning.busy === 'close' ? 'Отправляем…' : cancel ? 'Подтвердить отмену' : 'Подтвердить завершение')}
+              {t(planning.busy === 'close' ? 'Отправляем…' : pending ? 'Повторить тот же запрос' : cancel ? 'Подтвердить отмену' : 'Подтвердить завершение')}
             </button>
-            <button type="button" className="action-secondary planning-button" disabled={Boolean(planning.busy)} onClick={() => { setStep('decide'); setNotice(null) }}>{t('Назад к решениям')}</button>
+            <button type="button" className="action-secondary planning-button" disabled={Boolean(planning.busy) || Boolean(pending)} onClick={() => { setStep('decide'); setNotice(null) }}>{t('Назад к решениям')}</button>
           </div>
         </div>
       )}

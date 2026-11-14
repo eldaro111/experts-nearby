@@ -14,6 +14,7 @@ test('error codes map to explicit outcomes; server rule texts are kept', () => {
   const rule = P.classifyError({ code: '23514', message: 'Превышен строгий WIP-лимит этапа.' })
   assert.deepEqual([rule.kind, rule.message], ['rule', 'Превышен строгий WIP-лимит этапа.'])
   assert.equal(P.classifyError({ code: '23505', message: 'duplicate key' }).kind, 'taken')
+  assert.equal(P.classifyError({ code: '22023', message: 'Идентификатор операции уже связан с другим запросом.' }).kind, 'rule')
   assert.equal(P.classifyError({ code: 'P0001', message: 'Проект завершён: состав команды и задачи зафиксированы' }).kind, 'closed_project')
   for (const code of ['PGRST202', 'PGRST205', '42P01', '42883']) assert.equal(P.classifyError({ code, message: 'x' }).kind, 'unavailable', code)
   assert.equal(P.classifyError({ code: '', message: 'TypeError: Failed to fetch' }).kind, 'network')

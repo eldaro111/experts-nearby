@@ -13,7 +13,10 @@ const out = `${root}/test-results/planning`
 mkdirSync(out, { recursive: true })
 const results = []
 const errors = []
-const check = checker(results)
+const runCheck = checker(results)
+const only = process.env.PLANNING_ONLY ? new RegExp(process.env.PLANNING_ONLY) : null
+// Filter only independent fixtures. The original lifecycle checks share state.
+const check = (name, fn) => !only || only.test(name) ? runCheck(name,fn) : Promise.resolve()
 const USER = '00000000-0000-4000-8000-0000000000d1'
 const MEMBER = '00000000-0000-4000-8000-0000000000d2'
 const OTHER = '00000000-0000-4000-8000-0000000000d3'
@@ -142,6 +145,12 @@ try {
     await doing.getByLabel('WIP-лимит (необязательно)').fill('1')
     await doing.getByRole('button', { name: 'Сохранить этап' }).click()
     await notice(panel, 'Этап сохранён.').waitFor()
+    assert.ok(tables.tasks.every((t) => t.stage_id === null), 'switching mode does not assign legacy tasks')
+    for (const title of ['Сделать эскиз', 'Расчёт привода']) {
+      await owner.page.getByLabel(`Этап задачи «${title}»`).selectOption({ label: 'В работе' })
+      await owner.page.getByLabel(`Этап задачи «${title}»`).isEnabled()
+      await owner.page.waitForFunction(() => !document.querySelector('[data-task-card] select:disabled'))
+    }
     await panel.locator('.planning-wip.is-over', { hasText: 'превышен лимит (мягкий режим)' }).waitFor()
     await shot(owner.page, 'planning-settings-1440', panel)
   })
@@ -203,7 +212,7 @@ try {
     await panel.getByRole('button', { name: 'Новый спринт' }).click()
     await panel.getByRole('form', { name: 'Новый спринт' }).getByRole('button', { name: 'Создать спринт' }).click()
     await notice(panel, 'Спринт создан.').waitFor()
-    const create = calls(mock, 'create_project_sprint')[0].args
+    const create = calls(mock, 'create_project_sprint_once')[0].args
     assert.equal(new Date(create.p_start_at).getTime(), new Date('2026-12-01T09:00:00+07:00').getTime(), 'device zone, time of day kept')
 
     await tab(panel, 'Бэклог').click()
@@ -224,7 +233,7 @@ try {
     await shot(page, 'sprint-active-1440', panel)
 
     // A task is finished on the board meanwhile.
-    await page.locator('[data-task-card="T2"]').getByRole('button', { name: 'Готово', exact: true }).click()
+    await page.getByLabel('Этап задачи «Сделать эскиз»').selectOption({ label: 'Готово' })
     await page.locator('[data-task-card="T2"]').getByText('Завершено:').waitFor()
     await s1.getByRole('button', { name: 'Завершить спринт' }).click()
     const dialog = page.getByRole('dialog', { name: 'Завершение спринта: Спринт 1' })
@@ -237,10 +246,10 @@ try {
     await shot(page, 'close-dialog-1440', dialog)
     await dialog.getByRole('button', { name: 'Проверить итог' }).click()
     await dialog.getByText('Шаг 2 из 2: проверьте итог').waitFor()
-    assert.equal(calls(mock, 'close_project_sprint').length, 0, 'nothing sent before the confirmation')
+    assert.equal(calls(mock, 'close_project_sprint_once').length, 0, 'nothing sent before the confirmation')
     await dialog.getByRole('button', { name: 'Подтвердить завершение' }).click()
     await notice(panel, 'Спринт завершён. Итоги сохранены.').waitFor()
-    const close = calls(mock, 'close_project_sprint')[0].args
+    const close = calls(mock, 'close_project_sprint_once')[0].args
     assert.equal(close.p_cancel, false)
     const s2 = tables.project_sprints.find((s) => s.number === 2)
     assert.deepEqual([...close.p_decisions].sort((a, b) => a.task_id.localeCompare(b.task_id)), [{ task_id: 'T1', destination: 'backlog' }, { task_id: 'T5', destination: 'sprint', sprint_id: s2.id, expected_sprint_version: 1 }])
@@ -285,10 +294,10 @@ try {
     await notice(dialog, 'Для отмены спринта укажите причину.').waitFor()
     await dialog.getByLabel('Причина отмены (обязательно)').fill('Заказ деталей перенесён')
     await dialog.getByRole('button', { name: 'Проверить итог' }).click()
-    mock.faults.push({ fn: 'close_project_sprint', mode: 'drop' })
+    mock.faults.push({ fn: 'close_project_sprint_once', mode: 'drop' })
     await dialog.getByRole('button', { name: 'Подтвердить отмену' }).click()
-    await notice(panel, 'Ответ сервера не дошёл, но спринт уже закрыт').waitFor()
-    assert.equal(calls(mock, 'close_project_sprint').filter((c) => c.args.p_cancel).length, 1, 'sent exactly once')
+    await notice(panel, 'Закрытие подтверждено по идентификатору операции').waitFor()
+    assert.equal(calls(mock, 'close_project_sprint_once').filter((c) => c.args.p_cancel).length, 1, 'sent exactly once')
     await panel.locator('.planning-closed li').filter({ hasText: 'Спринт 2' }).locator('.planning-state', { hasText: 'Отменён' }).waitFor()
   })
 
@@ -382,6 +391,122 @@ try {
   })
   await owner.context.close()
 
+  await check('custom stage on the working board: configure, keyboard move, reload, strict WIP/refusal/conflict rollback', async () => {
+    const t = seed(), b = createBackend(t, { userId: USER, rpc: rpcStatic, strictQueries: true }), m = createPlanningMock(t)
+    const ctx = await open(browser,b,m), page=ctx.page
+    let p=await openProject(page,base)
+    await p.getByRole('radio',{name:/^Свой процесс/}).check()
+    await p.getByRole('button',{name:'Сохранить настройки'}).click()
+    await notice(p,'Настройки планирования сохранены.').waitFor()
+    await p.getByRole('button',{name:'Добавить этап'}).click()
+    const form=p.getByRole('form',{name:'Новый этап'})
+    await form.getByLabel('Название',{exact:true}).fill('Сборка CAD')
+    await form.getByLabel('Статус задач в этапе (необязательно)').fill('assembly')
+    await form.getByLabel('WIP-лимит (необязательно)').fill('1')
+    await form.getByRole('button',{name:'Сохранить этап'}).click()
+    await notice(p,'Этап добавлен.').waitFor()
+    const stage=t.project_stages.find(s=>s.name==='Сборка CAD'), dates=[t.tasks[0].start_at,t.tasks[0].due_at]
+    await page.getByLabel('Этап задачи «Собрать требования»').selectOption(stage.id)
+    await page.locator(`[data-stage-id="${stage.id}"] [data-task-card="T1"]`).waitFor()
+    p=await openProject(page,base)
+    await page.locator(`[data-stage-id="${stage.id}"] [data-task-card="T1"]`).waitFor()
+    assert.deepEqual([t.tasks[0].start_at,t.tasks[0].due_at],dates)
+    await p.getByRole('radio',{name:/^Строг/}).check()
+    await p.getByRole('button',{name:'Сохранить настройки'}).click()
+    await notice(p,'Настройки планирования сохранены.').waitFor()
+    await page.getByLabel('Этап задачи «Заказать детали»').selectOption(stage.id)
+    await page.getByText('Превышен строгий WIP-лимит этапа.',{exact:true}).waitFor()
+    assert.equal(t.tasks.find(x=>x.id==='T5').stage_id,null)
+    assert.equal(await page.getByLabel('Этап задачи «Заказать детали»').inputValue(),'unassigned')
+    const moving=t.tasks.find(x=>x.id==='T1');moving.planning_version+=1
+    await page.getByLabel('Этап задачи «Собрать требования»').selectOption({label:'В работе'})
+    await page.getByText(/Задача изменилась/).first().waitFor()
+    assert.equal(await page.getByLabel('Этап задачи «Собрать требования»').inputValue(),stage.id)
+    m.faults.push({fn:'edit_task_planning',code:'42501',message:'Нет доступа к задаче.'})
+    await page.getByLabel('Этап задачи «Собрать требования»').selectOption({label:'В работе'})
+    await page.getByText('Нет доступа к задаче.',{exact:true}).waitFor()
+    assert.equal(moving.stage_id,stage.id)
+    const grip=page.locator('[data-task-grip="T1"]')
+    await grip.focus();await page.keyboard.press('Space');await page.keyboard.press('ArrowLeft');await page.keyboard.press('Space')
+    await page.locator(`[data-stage-id="${t.project_stages.find(s=>s.category==='done').id}"] [data-task-card="T1"]`).waitFor()
+    await page.locator('[data-task-card="T1"]').getByText('Завершено:').waitFor()
+    assert.equal(moving.status,'done');assert.ok(moving.completed_at)
+    await page.locator('.task-board').evaluate(el=>window.scrollTo({top:el.getBoundingClientRect().top+window.scrollY-160,behavior:'instant'}))
+    await settle(page)
+    const from=await grip.boundingBox(),target=await page.locator(`[data-stage-id="${stage.id}"]`).boundingBox()
+    await page.mouse.move(from.x+from.width/2,from.y+from.height/2);await page.mouse.down()
+    await page.mouse.move(target.x+target.width/2,target.y+Math.min(target.height/2,60),{steps:12})
+    await page.locator(`[data-stage-id="${stage.id}"].is-drop-target`).waitFor()
+    await page.locator('.task-drag-ghost').waitFor();await page.mouse.up()
+    await page.waitForFunction(()=>!document.querySelector('[data-task-card="T1"].is-saving'))
+    assert.equal(moving.stage_id,stage.id);assert.equal(moving.status,'assembly');assert.equal(moving.completed_at,null)
+    await shot(page,'custom-stage-board',page.locator('.task-board'))
+    await page.setViewportSize({width:360,height:780})
+    assert.ok(await noHorizontalOverflow(page),'custom stage board fits mobile width')
+    await page.getByLabel('Этап задачи «Собрать требования»').selectOption({label:'К выполнению'})
+    await page.waitForFunction(()=>!document.querySelector('[data-task-card="T1"].is-saving'))
+    await page.reload();await page.locator('#planning .planning-mode-badge').waitFor()
+    assert.equal(await page.getByLabel('Этап задачи «Собрать требования»').inputValue(),t.project_stages.find(s=>s.category==='todo').id)
+    assert.ok(await noHorizontalOverflow(page),'mobile reload keeps layout')
+    await ctx.context.close()
+  })
+
+  await check('atomic stage and lead UI uses one request; refusal does not partially replace order/role', async () => {
+    const t=seed(), b=createBackend(t,{userId:USER,rpc:rpcStatic,strictQueries:true}), m=createPlanningMock(t)
+    const ctx=await open(browser,b,m), p=await openProject(ctx.page,base)
+    await p.getByRole('radio',{name:/^Kanban/}).check()
+    await p.getByRole('button',{name:'Сохранить настройки'}).click();await notice(p,'Настройки планирования сохранены.').waitFor()
+    const initial=t.project_stages.map(s=>s.id)
+    m.faults.push({fn:'reorder_project_stages',code:'PT409',message:'Состав этапов изменился.'})
+    await p.getByRole('button',{name:'Переместить этап ниже: К выполнению'}).click()
+    await notice(p,'Данные уже изменились').waitFor()
+    assert.deepEqual(t.project_stages.map(s=>s.id),initial)
+    await p.getByRole('button',{name:'Переместить этап ниже: К выполнению'}).click()
+    await notice(p,'Порядок этапов изменён.').waitFor()
+    assert.equal(calls(m,'reorder_project_stages').length,2)
+    assert.equal(calls(m,'upsert_project_stage').length,0)
+    await p.getByLabel(/^Product Owner/).selectOption({label:'Иван Иванов'});await notice(p,'Роль сохранена.').waitFor()
+    m.faults.push({fn:'replace_project_lead',code:'23514',message:'Роль требует действующего членства.'})
+    await p.getByLabel(/^Product Owner/).selectOption({label:'Анна Петрова'})
+    await notice(p,'Роль требует действующего членства.').waitFor()
+    assert.equal(t.project_roles[0].user_id,USER)
+    await p.getByLabel(/^Product Owner/).selectOption({label:'Анна Петрова'});await notice(p,'Роль сохранена.').waitFor()
+    assert.equal(t.project_roles[0].user_id,MEMBER)
+    assert.equal(calls(m,'set_project_role').length,0)
+    await ctx.context.close()
+  })
+
+  await check('lost create/close answer: absent receipt stays unknown; reload/manual same UUID retry creates no duplicate', async () => {
+    const t=seed(), b=createBackend(t,{userId:USER,rpc:rpcStatic,strictQueries:true}), m=createPlanningMock(t)
+    const ctx=await open(browser,b,m), page=ctx.page
+    let p=await openProject(page,base)
+    await p.getByRole('radio',{name:/^Scrum/}).check()
+    await p.getByRole('button',{name:'Сохранить настройки'}).click();await notice(p,'Настройки планирования сохранены.').waitFor()
+    await tab(p,'Спринты').click();await p.getByRole('button',{name:'Новый спринт'}).click()
+    m.faults.push({fn:'create_project_sprint_once',mode:'drop'},{fn:'get_project_planning_request',mode:'null'})
+    await p.getByRole('button',{name:'Создать спринт',exact:true}).click()
+    await notice(p,'Результат создания пока неизвестен').waitFor()
+    assert.equal(calls(m,'create_project_sprint_once').length,1)
+    const sent=calls(m,'create_project_sprint_once')[0].args
+    p=await openProject(page,base);await tab(p,'Спринты').click();await p.getByRole('button',{name:'Новый спринт'}).click()
+    await notice(p,'Сохранён незавершённый запрос создания').waitFor()
+    await p.getByRole('button',{name:'Повторить тот же запрос'}).click()
+    await notice(p,'Спринт создан.').waitFor()
+    assert.deepEqual(calls(m,'create_project_sprint_once')[1].args,sent);assert.equal(t.project_sprints.length,1)
+    await p.getByRole('region',{name:'Спринт 1'}).getByRole('button',{name:'Отменить спринт'}).click()
+    const dialog=page.getByRole('dialog',{name:'Отмена спринта: Спринт 1'})
+    await dialog.getByLabel('Причина отмены (обязательно)').fill('Synthetic')
+    await dialog.getByRole('button',{name:'Проверить итог'}).click()
+    m.faults.push({fn:'close_project_sprint_once',mode:'drop'},{fn:'get_project_planning_request',mode:'null'})
+    await dialog.getByRole('button',{name:'Подтвердить отмену'}).click()
+    await notice(dialog,'Результат закрытия пока неизвестен').waitFor()
+    assert.equal(calls(m,'close_project_sprint_once').length,1)
+    await dialog.getByRole('button',{name:'Проверить результат закрытия'}).click()
+    await notice(p,'Закрытие подтверждено по идентификатору операции').waitFor()
+    assert.equal(calls(m,'close_project_sprint_once').length,1,'read confirmation does not resend')
+    await ctx.context.close()
+  })
+
   await check('server without the planning migrations: a clear unavailable state; board and card still work', async () => {
     const t2 = seed({ planningColumns: false })
     const b2 = createBackend(t2, { userId: USER, rpc: rpcStatic, strictQueries: true })
@@ -393,6 +518,40 @@ try {
     await shot(ctx.page, 'unavailable-1440', p)
     await ctx.page.getByRole('button', { name: 'Карточка задачи «Собрать требования»' }).click()
     await ctx.page.getByRole('dialog', { name: 'Собрать требования' }).getByText('Оценки задач появятся после обновления базы данных на сервере.').waitFor()
+    await ctx.context.close()
+  })
+
+  for (const writing of [false,true]) await check(`SPA project switch during ${writing ? 'save' : 'load'}: late P1 response cannot change P2 tasks/settings/notices`, async () => {
+    const t=seed();t.listings.push({...t.listings[0],id:'P2',title:'Второй проект'})
+    t.tasks.push({...task('T20','Только второй проект','todo'),project_id:'P2'})
+    const b=createBackend(t,{userId:USER,rpc:rpcStatic,strictQueries:true}),m=createPlanningMock(t),ctx=await open(browser,b,m),page=ctx.page
+    let entered,release,delivered
+    const started=new Promise(r=>entered=r),hold=new Promise(r=>release=r),finished=new Promise(r=>delivered=r)
+    if(writing) {
+      const p=await openProject(page,base)
+      await p.getByLabel('Цель проекта').fill('Только первый проект')
+      m.faults.push({fn:'update_project_planning',entered,hold,delivered})
+      await p.getByRole('button',{name:'Сохранить настройки'}).click()
+    } else {
+      m.faults.push({fn:'get_project_backlog',entered,hold,delivered})
+      await page.goto(`${base}/projects/P1#planning`)
+    }
+    await started
+    await page.evaluate(()=>{window.__planningNavigationProbe='same-document'})
+    await page.locator('header a[href="/"]').first().click()
+    await page.getByRole('button',{name:'Сменить',exact:true}).click()
+    await page.getByRole('dialog',{name:'Выберите проект'}).locator('.project-picker-item').filter({hasText:'Второй проект'}).click()
+    await page.getByRole('button',{name:/План работ/}).click()
+    const p=page.locator('#planning');await p.locator('.planning-mode-badge').waitFor()
+    await page.locator('[data-task-card="T20"]').waitFor()
+    release();await finished
+    await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))))
+    assert.equal(await page.evaluate(()=>window.__planningNavigationProbe),'same-document','actual client-side navigation')
+    assert.equal(new URL(page.url()).pathname,'/projects/P2')
+    assert.equal(await page.locator('[data-task-card="T1"]').count(),0)
+    assert.equal(await p.getByLabel('Цель проекта').inputValue(),'')
+    assert.equal(await p.locator('.planning-notice').count(),0)
+    assert.equal(await p.getByRole('button',{name:'Обновить',exact:true}).isEnabled(),true)
     await ctx.context.close()
   })
 
@@ -415,7 +574,7 @@ try {
   })
 
   await check('no browser runtime errors', async () => assert.deepEqual(errors, []))
-  writeFileSync(`${out}/results.json`, JSON.stringify({ checks: results.length, results, errors }, null, 2))
+  writeFileSync(`${out}/${only?'targeted-':''}results.json`, JSON.stringify({ checks: results.length, results, errors }, null, 2))
   console.log('PASS', results.length, 'planning checks (mock API)')
 } catch (error) {
   console.error('FAIL', error.message)

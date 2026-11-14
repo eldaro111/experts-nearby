@@ -133,19 +133,11 @@ function RolesBlock({ planning, data, projectId, members }: Pick<PanelProps, 'pl
   const holder = (role: P.PlanningRoleName) => data.roles.find((item) => item.role === role)?.user_id ?? null
   const developers = new Set(data.roles.filter((item) => item.role === 'developer').map((item) => item.user_id))
 
-  // PO/SM are unique per project: replacing a holder is two calls with fresh versions.
+  // Replacing a unique holder is one atomic server operation.
   const assignLead = async (role: 'product_owner' | 'scrum_master', userId: string) => {
     const previous = holder(role)
     if (previous === (userId || null)) return
-    const result = await planning.perform(`role-${role}`, async (db) => {
-      let version = data.settings.version
-      if (previous) {
-        const removed = await P.setRole(db, projectId, version, previous, role, false)
-        if (!removed.ok || !userId) return removed
-        version = removed.data.version
-      }
-      return P.setRole(db, projectId, version, userId, role, true)
-    })
+    const result = await planning.perform(`role-${role}`, (db) => P.replaceLead(db, projectId, data.settings.version, role, userId || null))
     if (!result) return
     setNotice(result.ok ? { tone: 'success', text: 'Роль сохранена.' } : errorNotice(result.error))
   }

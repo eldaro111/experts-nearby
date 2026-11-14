@@ -33,6 +33,11 @@ import type {
 
 export default function ProjectWorkspacePage() {
   const { id } = useParams<{ id: string }>()
+  // Route changes discard all project drafts, selections and pending response handlers together.
+  return <ProjectWorkspace key={id} id={id} />
+}
+
+function ProjectWorkspace({ id }: { id: string }) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -48,6 +53,9 @@ export default function ProjectWorkspacePage() {
 
   const [tasks, setTasks] = useState<Task[]>([])
   const [tasksLoading, setTasksLoading] = useState(false)
+  const mounted = useRef(false)
+  const taskRead = useRef(0)
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; taskRead.current += 1 } }, [])
 
   const toDateTimeLocalValue = (value: string | null) => {
     if (!value) return ''
@@ -98,6 +106,7 @@ export default function ProjectWorkspacePage() {
       .eq('listing_id', project.id)
       .eq('status', 'accepted')
 
+    if (!mounted.current) return
     if (appsError) {
       logAppError('Ошибка загрузки участников проекта', appsError)
       setMembers([])
@@ -121,6 +130,7 @@ export default function ProjectWorkspacePage() {
       .select('user_id, display_name')
       .in('user_id', uniqueMemberIds)
 
+    if (!mounted.current) return
     if (profilesError) {
       logAppError('Ошибка загрузки профилей участников', profilesError)
       setMembers([])
@@ -131,12 +141,16 @@ export default function ProjectWorkspacePage() {
   }
 
   const refreshTasks = async () => {
+    if (!mounted.current) return
+    const readId = ++taskRead.current
     const { data, error } = await supabase
       .from('tasks')
       .select('*')
       .eq('project_id', id)
       .order('created_at', { ascending: false })
 
+    if (!mounted.current || readId !== taskRead.current) return
+    setTasksLoading(false)
     if (error) {
       logAppError('Ошибка обновления задач', error)
       return
@@ -153,6 +167,7 @@ export default function ProjectWorkspacePage() {
         data: { user },
       } = await supabase.auth.getUser()
 
+      if (!mounted.current) return
       if (!user) {
         // Sign-in returns to the same project, task and section.
         router.replace(signInHref(`${window.location.pathname}${window.location.search}${window.location.hash}`))
@@ -167,6 +182,7 @@ export default function ProjectWorkspacePage() {
         .eq('id', id)
         .single()
 
+      if (!mounted.current) return
       if (projectError || !project) {
         logAppError('Ошибка загрузки проекта', projectError)
         setListing(null)
@@ -190,6 +206,7 @@ export default function ProjectWorkspacePage() {
           .eq('status', 'accepted')
           .maybeSingle()
 
+        if (!mounted.current) return
         if (membershipError) {
           logAppError('Ошибка проверки доступа', membershipError)
           setHasAccess(false)
@@ -208,7 +225,7 @@ export default function ProjectWorkspacePage() {
         await loadMembers(project)
       }
 
-      setLoading(false)
+      if (mounted.current) setLoading(false)
     }
 
     fetchWorkspace()
@@ -219,6 +236,7 @@ export default function ProjectWorkspacePage() {
       if (!hasAccess) return
 
       setTasksLoading(true)
+      const readId = ++taskRead.current
 
       const { data, error } = await supabase
         .from('tasks')
@@ -226,6 +244,7 @@ export default function ProjectWorkspacePage() {
         .eq('project_id', id)
         .order('created_at', { ascending: false })
 
+      if (!mounted.current || readId !== taskRead.current) return
       if (error) {
         logAppError('Ошибка загрузки задач', error)
         setTasks([])
@@ -420,6 +439,7 @@ export default function ProjectWorkspacePage() {
               tasksLoading={tasksLoading}
               onTasksChanged={refreshTasks}
               onOpenTask={openTask}
+              planning={planning}
             />
             </fieldset>
 

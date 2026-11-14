@@ -3,6 +3,7 @@
 import { useId, useState } from 'react'
 import { useLocale, useT } from '@/components/LocaleProvider'
 import * as P from '@/lib/planning'
+import { readPendingCreate, readPendingClose, storePending, clearPending } from '@/lib/planningPending'
 import { boardStatusLabel } from '@/lib/taskLabels'
 import type { Task } from '../types'
 import { SprintCloseDialog } from './SprintCloseDialog'
@@ -12,7 +13,10 @@ import { NoticeBox, errorNotice, useMemberName, type Notice, type PanelProps } f
 
 type FormState = { sprint: P.Sprint | null; base: number; name: string; goal: string; start: string; end: string }
 
-const toDraft = (form: FormState): P.SprintDraft => ({ name: form.name.trim(), goal: form.goal, start_at: P.fromLocalInput(form.start), end_at: P.fromLocalInput(form.end) })
+// An unchanged minute-precision input must not truncate existing seconds.
+const toDraft = (form: FormState): P.SprintDraft => ({ name: form.name.trim(), goal: form.goal,
+  start_at: form.sprint && form.start === P.toLocalInput(form.sprint.start_at) ? form.sprint.start_at : P.fromLocalInput(form.start),
+  end_at: form.sprint && form.end === P.toLocalInput(form.sprint.end_at) ? form.sprint.end_at : P.fromLocalInput(form.end) })
 
 export function SprintsPanel(props: PanelProps) {
   const { planning, data, projectId } = props
@@ -22,8 +26,9 @@ export function SprintsPanel(props: PanelProps) {
   const scrum = data.settings.mode === 'scrum'
   const [form, setForm] = useState<FormState | null>(null)
   const [formConflict, setFormConflict] = useState(false)
+  const [pending, setPending] = useState<P.CreateSprintRequest | null>(null)
   const [notice, setNotice] = useState<Notice>(null)
-  const [closing, setClosing] = useState<{ sprintId: string; cancel: boolean } | null>(null)
+  const [closing, setClosing] = useState<{ sprintId: string; cancel: boolean; request: P.CloseSprintRequest | null } | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
 
   const active = data.sprints.find((sprint) => sprint.state === 'active') ?? null
@@ -35,7 +40,12 @@ export function SprintsPanel(props: PanelProps) {
   const openForm = (sprint: P.Sprint | null) => {
     setNotice(null)
     setFormConflict(false)
-    setForm(sprint
+    const saved = !sprint && planning.userId ? readPendingCreate(planning.userId, projectId) : null
+    setPending(saved)
+    if (saved) setNotice({ tone: 'warning', text: 'Сохранён незавершённый запрос создания. Проверьте его результат или повторите тот же запрос.' })
+    setForm(saved
+      ? { sprint: null, base: saved.expectedVersion, name: saved.draft.name, goal: saved.draft.goal, start: P.toLocalInput(saved.draft.start_at), end: P.toLocalInput(saved.draft.end_at) }
+      : sprint
       ? { sprint, base: sprint.version, name: sprint.name, goal: sprint.goal, start: P.toLocalInput(sprint.start_at), end: P.toLocalInput(sprint.end_at) }
       : { sprint: null, base: data.settings.version, name: `${t('Спринт')} ${nextNumber}`, goal: '', start: '', end: '' })
   }
@@ -45,26 +55,40 @@ export function SprintsPanel(props: PanelProps) {
     const draft = toDraft(form)
     const problem = P.checkSprintDraft(draft)
     if (problem) { setNotice({ tone: 'error', text: problem }); return }
-    const startedAt = P.requestMoment()
     const editing = form.sprint
-    const result = await planning.perform('sprint-form', (db) => (editing ? P.updateSprint(db, editing.id, base, draft) : P.createSprint(db, projectId, base, draft)))
+    const request = editing ? null : pending ?? { requestId: crypto.randomUUID(), projectId, expectedVersion: base, draft }
+    if (request) { setPending(request); storePending(planning.userId!, projectId, request) }
+    const result = await planning.perform('sprint-form', (db) => (editing ? P.updateSprint(db, editing.id, base, draft) : P.createSprintOnce(db, request!)))
     if (!result) return
     if (result.ok) {
+      if (request) clearPending(planning.userId!, projectId, request)
+      setPending(null)
       setForm(null)
       setFormConflict(false)
       setNotice({ tone: 'success', text: editing ? 'Спринт сохранён.' : 'Спринт создан.' })
       return
     }
-    if (!editing && (result.error.kind === 'timeout' || result.error.kind === 'network')) {
-      // No request id on the server: look for the sprint instead of creating it twice.
-      const check = await P.loadSprints(planning.db, projectId)
-      const found = check.ok && check.data.find((sprint) => sprint.name === draft.name && sprint.created_by === planning.userId && new Date(sprint.created_at).getTime() >= startedAt - 120_000)
-      if (found) { setForm(null); setNotice({ tone: 'info', text: 'Ответ сервера не дошёл, но спринт создан — он показан в списке. Повторно запрос не отправлялся.' }); return }
-      setNotice({ tone: 'warning', text: check.ok ? 'Спринт не создан: сервер не подтвердил операцию. Проверьте список и создайте снова, если нужно.' : 'Не удалось проверить результат. Обновите данные, прежде чем повторять.' })
+    if (request && P.uncertainWrite(result.error)) {
+      await checkCreation(request)
       return
     }
+    if (request) clearPending(planning.userId!, projectId, request)
+    setPending(null)
     setFormConflict(result.error.kind === 'conflict')
     setNotice(errorNotice(result.error))
+  }
+
+  const checkCreation = async (request: P.CreateSprintRequest) => {
+    const check = await planning.inspect((db) => P.loadRequest(db, projectId, request.requestId))
+    if (!check) return
+    if (check.ok && check.data?.kind === 'create_sprint' && check.data.actor_id === planning.userId) {
+      clearPending(planning.userId!, projectId, request)
+      setPending(null); setForm(null); setFormConflict(false)
+      setNotice({ tone: 'info', text: 'Создание подтверждено по идентификатору операции. Повторный спринт не создавался.' })
+      await planning.refresh()
+    } else {
+      setNotice({ tone: 'warning', text: 'Результат создания пока неизвестен. Можно проверить снова или явно повторить тот же запрос без дубля.' })
+    }
   }
 
   const latest = form?.sprint ? data.sprints.find((sprint) => sprint.id === form.sprint?.id) ?? null : null
@@ -80,8 +104,9 @@ export function SprintsPanel(props: PanelProps) {
       {!scrum && <p className="planning-hint">{t('Режим Scrum выключен: новые спринты не создаются. Планируемый спринт можно отменить, чтобы вернуть его задачи; итоги закрытых спринтов сохраняются.')}</p>}
       {!caps.canManage && !caps.readOnly && <p className="planning-hint">{t('Создавать, начинать и закрывать спринты может автор проекта, а при делегировании — Product Owner или Scrum Master. Состав планируемого спринта меняет любой участник.')}</p>}
 
-      {form && !form.sprint && <SprintForm form={form} setForm={setForm} busy={Boolean(planning.busy)} onSubmit={() => void submit(form.base)} onCancel={() => setForm(null)} />}
+      {form && !form.sprint && <SprintForm form={form} setForm={setForm} busy={Boolean(planning.busy)} pending={Boolean(pending)} onSubmit={() => void submit(form.base)} onCancel={() => setForm(null)} />}
       <NoticeBox notice={notice}>
+        {pending && !planning.busy && <button type="button" className="action-secondary planning-button" onClick={() => void checkCreation(pending)}>{t('Проверить результат создания')}</button>}
         {formConflict && form && (
           <>
             <button type="button" className="action-primary planning-button" disabled={Boolean(planning.busy)} onClick={() => { const base = form.sprint ? latest?.version ?? form.base : data.settings.version; setForm({ ...form, base }); void submit(base) }}>{t('Сохранить мои значения поверх новых')}</button>
@@ -104,7 +129,11 @@ export function SprintsPanel(props: PanelProps) {
           onSubmitForm={() => form && void submit(form.base)}
           onClose={(cancel) => {
             setNotice(null)
-            void planning.refresh().then(() => setClosing({ sprintId: sprint.id, cancel }))
+            void planning.refresh().then((current) => {
+              if (!current) return
+              const request = planning.userId ? readPendingClose(planning.userId, projectId, sprint.id) : null
+              setClosing({ sprintId: sprint.id, cancel: request?.close.cancel ?? cancel, request })
+            })
           }}
           setNotice={setNotice}
         />
@@ -130,10 +159,11 @@ export function SprintsPanel(props: PanelProps) {
         </div>
       )}
 
-      {closing && closingSprint && (closingSprint.state === 'active' || closingSprint.state === 'planned') && (
+      {closing && closingSprint && (
         <SprintCloseDialog
           sprint={closingSprint}
           cancel={closing.cancel}
+          initialRequest={closing.request}
           planning={planning}
           data={data}
           projectId={projectId}
@@ -273,10 +303,11 @@ function OpenSprint({ planning, data, members, tasks, onOpenTask, sprint, hasAct
   )
 }
 
-function SprintForm({ form, setForm, busy, onSubmit, onCancel }: { form: FormState; setForm: (form: FormState) => void; busy: boolean; onSubmit: () => void; onCancel: () => void }) {
+function SprintForm({ form, setForm, busy, pending = false, onSubmit, onCancel }: { form: FormState; setForm: (form: FormState) => void; busy: boolean; pending?: boolean; onSubmit: () => void; onCancel: () => void }) {
   const t = useT()
   return (
     <form className="planning-inline-form" aria-label={t(form.sprint ? 'Изменение спринта' : 'Новый спринт')} onSubmit={(event) => { event.preventDefault(); onSubmit() }}>
+      <fieldset disabled={busy || pending} className="planning-block">
       <div className="planning-grid">
         <label className="planning-field">
           <span className="planning-label">{t('Название')}</span>
@@ -295,10 +326,11 @@ function SprintForm({ form, setForm, busy, onSubmit, onCancel }: { form: FormSta
         <span className="planning-label">{t('Цель спринта')}</span>
         <textarea rows={2} maxLength={P.SPRINT_GOAL_MAX} value={form.goal} onChange={(e) => setForm({ ...form, goal: e.target.value })} />
       </label>
+      </fieldset>
       <p className="planning-hint">{t('Даты можно оставить пустыми до старта. Время — в часовом поясе устройства.')}</p>
       <div className="planning-actions">
-        <button type="submit" className="action-primary planning-button" disabled={busy}>{t(busy ? 'Сохраняем…' : form.sprint ? 'Сохранить спринт' : 'Создать спринт')}</button>
-        <button type="button" className="action-secondary planning-button" onClick={onCancel}>{t('Отмена')}</button>
+        <button type="submit" className="action-primary planning-button" disabled={busy}>{t(busy ? 'Сохраняем…' : pending ? 'Повторить тот же запрос' : form.sprint ? 'Сохранить спринт' : 'Создать спринт')}</button>
+        <button type="button" className="action-secondary planning-button" disabled={busy} onClick={onCancel}>{t('Закрыть форму')}</button>
       </div>
     </form>
   )

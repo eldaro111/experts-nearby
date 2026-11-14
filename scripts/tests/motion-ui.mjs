@@ -7,13 +7,16 @@
 import assert from 'node:assert/strict'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { appEnv, buildApp, checker, createBackend, launchBrowser, newContext, noHorizontalOverflow, root, startApp } from './ui-harness.mjs'
+import { createPlanningMock } from './planning-mock.mjs'
 
 const PORT = 3005
 const out = `${root}/test-results/motion`
 mkdirSync(out, { recursive: true })
 const results = []
 const errors = []
-const check = checker(results)
+const runCheck = checker(results)
+const only = process.env.MOTION_ONLY ? new RegExp(process.env.MOTION_ONLY) : null
+const check = (name, fn) => !only || only.test(name) ? runCheck(name,fn) : Promise.resolve()
 const USER = '00000000-0000-4000-8000-0000000000b1'
 const MEMBER = '00000000-0000-4000-8000-0000000000b2'
 const OTHER = '00000000-0000-4000-8000-0000000000b3'
@@ -77,6 +80,11 @@ function freshBackend(projects = 'one', userId = USER) {
 
 async function openPage(browser, backend, options = {}) {
   const context = await newContext(browser, backend, options)
+  // Optional integration: valid planning responses in simple mode instead of null RPC stubs.
+  if (process.env.MOTION_PLANNING === '1') {
+    for (const task of backend.tables.tasks) Object.assign(task,{stage_id:task.stage_id??null,story_points:task.story_points??null,planned_hours:task.planned_hours??null,planning_version:task.planning_version??1})
+    await createPlanningMock(backend.tables).install(context)
+  }
   const page = await context.newPage()
   page.on('pageerror', (e) => errors.push(`${options.width || 1440}: ${e.message}`))
   return { context, page }
@@ -87,6 +95,7 @@ const settle = (page) => page.evaluate(() => Promise.all(document.getAnimations(
   .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
   .map((animation) => animation.finished.catch(() => null))))
 const centerOf = async (locator) => {
+  if(process.env.MOTION_PLANNING === '1' && new URL(locator.page().url()).pathname.startsWith('/projects/')) await locator.page().locator('#planning .planning-mode-badge').waitFor()
   // A card may still be gliding back after a cancel or a refusal; grab it where it ends up.
   await settle(locator.page())
   await locator.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }))

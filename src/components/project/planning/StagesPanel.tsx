@@ -43,25 +43,13 @@ export function StagesPanel({ planning, data, projectId, tasks }: Pick<PanelProp
     if (report(result, form.stage ? 'Этап сохранён.' : 'Этап добавлен.')) setForm(null)
   }
 
-  // Active positions are unique: swap through a free position, each step with fresh versions.
+  // One transaction: no temporary order can survive a failed request.
   const swap = async (index: number, delta: -1 | 1) => {
     const a = stages[index]
     const b = stages[index + delta]
     if (!a || !b) return
-    const free = Math.max(...stages.map((s) => s.position)) + 1
-    const result = await planning.perform('stage-order', async (db) => {
-      const draftOf = (stage: P.ProjectStage, position: number): P.StageDraft => ({ id: stage.id, version: stage.version, name: stage.name, position, category: stage.category, status_value: stage.status_value, policy: stage.policy, wip_limit: stage.wip_limit })
-      const version = async () => { const s = await P.loadSettings(db, projectId); return s.ok ? s.data.version : null }
-      const step1 = await P.saveStage(db, projectId, data.settings.version, draftOf(a, free))
-      if (!step1.ok) return step1
-      const v2 = await version()
-      if (v2 === null) return { ok: false as const, error: { kind: 'unknown' as const, code: '', message: 'Перестановка прервана: проверьте порядок этапов.' } }
-      const step2 = await P.saveStage(db, projectId, v2, draftOf(b, a.position))
-      if (!step2.ok) return step2
-      const v3 = await version()
-      if (v3 === null) return { ok: false as const, error: { kind: 'unknown' as const, code: '', message: 'Перестановка прервана: проверьте порядок этапов.' } }
-      return P.saveStage(db, projectId, v3, draftOf(step1.data, b.position))
-    })
+    const order = P.moveInOrder(stages.map((s) => s.id), index, index + delta)
+    const result = await planning.perform('stage-order', (db) => P.reorderStages(db, projectId, data.settings.version, order))
     report(result, 'Порядок этапов изменён.')
   }
 

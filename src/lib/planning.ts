@@ -208,6 +208,8 @@ export type PlanningRpc =
   | 'edit_task_planning' | 'get_project_backlog' | 'reorder_project_backlog' | 'create_project_sprint'
   | 'update_project_sprint' | 'add_tasks_to_sprint' | 'remove_task_from_sprint' | 'start_project_sprint'
   | 'close_project_sprint'
+  | 'reorder_project_stages' | 'replace_project_lead' | 'create_project_sprint_once'
+  | 'close_project_sprint_once' | 'get_project_planning_request'
 
 /** The two operations this module needs; see planningClient.ts for the Supabase implementation. */
 export interface PlanningDb {
@@ -253,7 +255,7 @@ export function classifyError(error: DbError | null | undefined, timedOut = fals
   const kind: PlanningErrorKind =
     code === 'PT409' ? 'conflict'
       : code === '42501' ? 'forbidden'
-        : code === '23514' ? 'rule'
+        : code === '23514' || code === '22023' ? 'rule'
           : code === '23505' ? 'taken'
             : code === 'P0001' ? (/заверш/i.test(serverMessage) ? 'closed_project' : 'rule')
               : UNAVAILABLE_CODES.has(code) ? 'unavailable'
@@ -580,6 +582,12 @@ export const setRole = (db: PlanningDb, projectId: string, expectedVersion: numb
     p_project_id: projectId, p_expected_version: expectedVersion, p_user_id: userId, p_role: role, p_assigned: assigned,
   }, (data) => parseSettings(single(data)), options)
 
+export const replaceLead = (db: PlanningDb, projectId: string, expectedVersion: number, role: 'product_owner' | 'scrum_master', userId: string | null, options?: CallOptions) =>
+  call(db, 'replace_project_lead', { p_project_id: projectId, p_expected_planning_version: expectedVersion, p_role: role, p_user_id: userId }, (data) => parseSettings(single(data)), options)
+
+export const reorderStages = (db: PlanningDb, projectId: string, expectedVersion: number, stageIds: string[], options?: CallOptions) =>
+  call(db, 'reorder_project_stages', { p_project_id: projectId, p_expected_planning_version: expectedVersion, p_stage_ids: stageIds }, (data) => parseSettings(single(data)), options)
+
 /** After this call the planning version has changed: read the settings again. */
 export const saveStage = (db: PlanningDb, projectId: string, expectedPlanningVersion: number, stage: StageDraft, options?: CallOptions) =>
   call(db, 'upsert_project_stage', {
@@ -651,6 +659,32 @@ export const closeSprint = (db: PlanningDb, sprintId: string, expectedVersion: n
   call(db, 'close_project_sprint', {
     p_sprint_id: sprintId, p_expected_version: expectedVersion, p_cancel: close.cancel, p_reason: close.reason, p_decisions: close.decisions,
   }, (data) => parseSprint(single(data)), options)
+
+/** Keep the same id AND immutable arguments for an explicit retry of an uncertain write. */
+export interface CreateSprintRequest { requestId: string; projectId: string; expectedVersion: number; draft: SprintDraft }
+export interface CloseSprintRequest { requestId: string; sprintId: string; expectedVersion: number; close: { cancel: boolean; reason: string | null; decisions: CloseDecision[] } }
+export const createSprintOnce = (db: PlanningDb, request: CreateSprintRequest, options?: CallOptions) =>
+  call(db, 'create_project_sprint_once', {
+    p_request_id: request.requestId, p_project_id: request.projectId, p_expected_planning_version: request.expectedVersion,
+    p_name: request.draft.name, p_goal: request.draft.goal, p_start_at: request.draft.start_at, p_end_at: request.draft.end_at,
+  }, (data) => parseSprint(single(data)), options)
+export const closeSprintOnce = (db: PlanningDb, request: CloseSprintRequest, options?: CallOptions) =>
+  call(db, 'close_project_sprint_once', {
+    p_request_id: request.requestId, p_sprint_id: request.sprintId, p_expected_version: request.expectedVersion,
+    p_cancel: request.close.cancel, p_reason: request.close.reason, p_decisions: request.close.decisions,
+  }, (data) => parseSprint(single(data)), options)
+
+export interface PlanningReceipt { request_id: string; project_id: string; actor_id: string; kind: 'create_sprint' | 'close_sprint'; result: Sprint }
+export const loadRequest = (db: PlanningDb, projectId: string, requestId: string, options?: CallOptions) =>
+  call(db, 'get_project_planning_request', { p_project_id: projectId, p_request_id: requestId }, (data): PlanningReceipt | null => {
+    if (data === null) return null // Absence is NOT proof of failure: the transaction may still run.
+    const o = obj(single(data), 'request receipt')
+    if (str(o, 'request_id') !== requestId || str(o, 'project_id') !== projectId) fail('request identity')
+    return { request_id: requestId, project_id: projectId, actor_id: str(o, 'actor_id'), kind: oneOf(o, 'kind', ['create_sprint', 'close_sprint'] as const), result: parseSprint(o.result) }
+  }, options)
+
+/** Transport/parse/unknown errors cannot prove whether a write committed. */
+export const uncertainWrite = (error: PlanningError) => ['timeout', 'network', 'invalid_response', 'unknown'].includes(error.kind)
 
 // ---------------------------------------------------------------------------------------------
 // Rules shown before sending (the server checks them again)
@@ -827,9 +861,6 @@ export function sumEstimates(tasks: { story_points: number | null; planned_hours
   }
   return { tasks: tasks.length, story_points: points, planned_hours: hours, unestimated_points: unestimatedPoints, unestimated_hours: unestimatedHours }
 }
-
-/** Moment a write was sent; used to recognise its own result when the answer was lost. */
-export const requestMoment = () => Date.now()
 
 /** datetime-local value (device zone) → ISO; empty → null. */
 export function fromLocalInput(value: string): string | null {
