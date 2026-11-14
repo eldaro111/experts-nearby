@@ -11,6 +11,7 @@ export const migrations = [
 ]
 export const planningMigration='20261114090000_project_planning.sql'
 export const sprintMigration='20261114100000_project_sprints.sql'
+export const atomicMigration='20261114120000_planning_atomic_operations.sql'
 export const readMigration=name=>readFileSync(new URL(`../../supabase/migrations/${name}`,import.meta.url),'utf8')
 export const bootstrap=`create publication supabase_realtime;
 create role anon; create role authenticated; create role service_role bypassrls;
@@ -26,6 +27,7 @@ export const owner='00000000-0000-4000-8000-000000000001'
 export const member='00000000-0000-4000-8000-000000000002'
 export const stranger='00000000-0000-4000-8000-000000000003'
 export async function setup(extra=[planningMigration]) {
+ if(process.argv.includes('--integration') && extra.includes(sprintMigration) && !extra.includes(atomicMigration)) extra=[...extra,atomicMigration]
  const db=new PGlite()
  try {
   await db.exec(bootstrap)
