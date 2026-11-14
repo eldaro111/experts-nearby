@@ -5,6 +5,8 @@ import { UiText, useT } from '@/components/LocaleProvider'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { authCallbackUrl, nextStepAfterSignIn, rememberPendingReturn, returnPathFromLocation } from '@/lib/authReturn'
+import { resolveAccessibleDestination } from '@/lib/projectAccess'
 import { UsersRound, ListChecks, FolderLock, ArrowRight, Mail } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PasswordInput } from '@/components/PasswordInput'
@@ -120,24 +122,31 @@ export default function AuthPage() {
       .maybeSingle()
 
     if (profileError) {
+      // Without knowing whether a profile exists, onboarding must not be skipped: open the profile.
       setSuccessText('Вход выполнен. Открываем профиль...')
       router.replace('/profile')
       router.refresh()
       return
     }
 
-    router.replace(profile ? '/profile' : '/onboarding')
+    // `/auth?next=/path` returns to the action that asked for sign-in; only same-site paths pass.
+    // Onboarding comes first when there is no profile yet; it continues to the same destination.
+    rememberPendingReturn(null)
+    const next = returnPathFromLocation()
+    const target = profile && next ? await resolveAccessibleDestination(next, data.user.id) : nextStepAfterSignIn(Boolean(profile), next)
+    router.replace(target)
     router.refresh()
   }
 
   const handleSignUpPassword = async () => {
     const origin = getOrigin()
 
+    const next = returnPathFromLocation()
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
       options: {
-        emailRedirectTo: `${origin}/auth/callback?type=signup`,
+        emailRedirectTo: authCallbackUrl(origin, 'signup', next),
       },
     })
 
@@ -147,10 +156,15 @@ export default function AuthPage() {
     }
 
     if (data.session) {
-      router.replace('/onboarding')
+      // Email confirmation is off: a new account goes through onboarding, then to the destination.
+      rememberPendingReturn(null)
+      router.replace(nextStepAfterSignIn(false, next))
       router.refresh()
       return
     }
+
+    // Same-browser fallback in case the confirmation link loses `next`.
+    rememberPendingReturn(next)
 
     setSuccessText(
       'Письмо для подтверждения отправлено. Проверьте входящие и папку «Спам».'
@@ -192,10 +206,11 @@ export default function AuthPage() {
     try {
       const origin = getOrigin()
 
+      const next = returnPathFromLocation()
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: {
-          emailRedirectTo: `${origin}/auth/callback?type=magiclink`,
+          emailRedirectTo: authCallbackUrl(origin, 'magiclink', next),
           shouldCreateUser: false,
         },
       })
@@ -204,6 +219,8 @@ export default function AuthPage() {
         setErrorText(getAuthErrorMessage(error))
         return
       }
+
+      rememberPendingReturn(next)
 
       setSuccessText(
         'Ссылка для входа отправлена. Проверьте входящие и папку «Спам».'
@@ -228,10 +245,12 @@ export default function AuthPage() {
     try {
       const origin = getOrigin()
 
+      // Recovery first sets a new password; only then the destination opens.
+      const next = returnPathFromLocation()
       const { error } = await supabase.auth.resetPasswordForEmail(
         email.trim(),
         {
-          redirectTo: `${origin}/auth/callback?type=recovery`,
+          redirectTo: authCallbackUrl(origin, 'recovery', next),
         }
       )
 
@@ -239,6 +258,8 @@ export default function AuthPage() {
         setErrorText(getAuthErrorMessage(error))
         return
       }
+
+      rememberPendingReturn(next)
 
       setSuccessText(
         'Письмо для сброса пароля отправлено. Проверьте входящие и папку «Спам».'

@@ -9,6 +9,7 @@ import { PageLoading } from '@/components/PageState'
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { useHashScroll } from '@/lib/useHashScroll'
 import { logAppError, showAppError, showAppMessage } from '@/lib/appFeedback'
 import { formatTimezone } from '@/lib/timezones'
 import { createNotification } from '@/lib/notifications'
@@ -653,6 +654,8 @@ const handleLeaveProject = async () => {
   }
 }
 
+  useHashScroll(!loading)
+
   if (loading) return <PageLoading />
 
   if (!listing) {
@@ -782,7 +785,8 @@ const handleLeaveProject = async () => {
 
       <hr className="my-8" />
 
-      <h2 className="text-xl font-semibold mb-4">Автор проекта</h2>
+      {/* #members: «Команда» on the home page opens the author and participants of the project. */}
+      <h2 id="members" className="scroll-mt-40 text-xl font-semibold mb-4">Автор проекта</h2>
       {author ? (
         <div className="border rounded-lg p-4 bg-white shadow-sm mb-6">
           <button

@@ -19,10 +19,10 @@ export function AdSlot({ id, className = '' }: { id: AdSlotId; className?: strin
     '--ad-h-desktop': `${sizes.desktop[1]}px`,
   } as CSSProperties
   return (
-    <aside className={`ad-slot ${className}`} data-ad-slot={id} aria-label="Рекламное место" style={style}>
+    <aside className={`ad-slot ${className}`} data-ad-slot={id} aria-label="Место для размещения партнёра" style={style}>
       <div className="ad-slot-box">
-        <span className="ad-slot-label">Рекламное место</span>
-        <span className="ad-slot-note">Демонстрационный блок · не реклама · {id}</span>
+        <span className="ad-slot-label">Место для размещения партнёра</span>
+        <span className="ad-slot-note">Демонстрационная заглушка · не реклама · {id}</span>
       </div>
     </aside>
   )

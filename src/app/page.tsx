@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { UiText } from '@/components/LocaleProvider'
 import { AdSlot } from '@/components/AdSlot'
-import { ArrowRight, ArrowUpRight, BriefcaseBusiness, UsersRound, ListChecks, Files, MessagesSquare, Fingerprint, Handshake, Layers3, CalendarDays, Check, Plus } from 'lucide-react'
+import { WorkspacePanel } from '@/components/home/WorkspacePanel'
+import { ArrowRight, ArrowUpRight, BriefcaseBusiness, UsersRound, ListChecks, Files, Fingerprint, Handshake, Layers3, CalendarDays, Check, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 const workflow = [
@@ -35,12 +36,8 @@ export default function Home() {
           <div className="workspace-topline"><span><Layers3 size={19} /><UiText text={"Рабочая среда"}/></span><span className="workspace-index">ЭР / 01</span></div>
           <h2><UiText text={"От первого отклика"}/><br /><UiText text={"до готового решения."}/></h2>
           <p className="workspace-description"><UiText text={"Весь контекст проекта — рядом."}/></p>
-          <div className="workspace-features">
-            <div><span className="workspace-feature-icon"><UsersRound size={21} /></span><div><strong><UiText text={"Команда"}/></strong><p><UiText text={"Роли, участники и приглашения"}/></p></div></div>
-            <div><span className="workspace-feature-icon"><ListChecks size={21} /></span><div><strong><UiText text={"План работ"}/></strong><p><UiText text={"Задачи, сроки и общий прогресс"}/></p></div></div>
-            <div><span className="workspace-feature-icon"><MessagesSquare size={21} /></span><div><strong><UiText text={"Обсуждения и материалы"}/></strong><p><UiText text={"Чат, файлы и история решений"}/></p></div></div>
-          </div>
-          <Link href="/dashboard" className="workspace-link"><UiText text={"Открыть рабочий центр"}/><ArrowUpRight size={21} /></Link>
+          {/* Shortcuts to concrete project pages; choosing a project and sign-in are handled inside. */}
+          <WorkspacePanel />
         </div>
       </section>
       <section className="entry-points" aria-label="С чего начать">

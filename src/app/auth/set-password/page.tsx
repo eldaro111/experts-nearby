@@ -7,6 +7,9 @@ import { PasswordInput } from '@/components/PasswordInput'
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { safeInternalPath } from '@/lib/safeRedirect'
+import { readPasswordStep, rememberPasswordStep } from '@/lib/authReturn'
+import { resolveAccessibleDestination } from '@/lib/projectAccess'
 
 type AccessState = 'checking' | 'allowed' | 'denied'
 
@@ -85,18 +88,16 @@ function SetPasswordContent() {
 
   const [accessState, setAccessState] = useState<AccessState>('checking')
   const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
   const [password, setPassword] = useState('')
   const [password2, setPassword2] = useState('')
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
-  const nextPath = useMemo(() => {
-    const raw = searchParams.get('next') || '/profile'
-
-    // Разрешаем только внутренний путь. `//example.com` тоже запрещён.
-    if (!raw.startsWith('/') || raw.startsWith('//')) return '/profile'
-
-    return raw
+  const linkNext = useMemo(() => {
+    // Только путь этого сайта: без `//host`, `/\host`, схем и без возврата в /auth (нет циклов).
+    // Здесь допустим /onboarding?next=… — онбординг идёт после установки пароля.
+    return safeInternalPath(searchParams.get('next'))
   }, [searchParams])
 
   useEffect(() => {
@@ -129,6 +130,7 @@ function SetPasswordContent() {
       }
 
       setUserEmail(userResult.data.user.email ?? 'Без email')
+      setUserId(userResult.data.user.id)
 
       const methods = getAuthMethods(claimsResult.data?.claims)
       const allowedByClaims = methods.some((method) =>
@@ -160,6 +162,7 @@ function SetPasswordContent() {
       'needs_pw_setup=; Path=/; Max-Age=0; SameSite=Lax'
     document.cookie =
       'needs_pw_reset=; Path=/; Max-Age=0; SameSite=Lax'
+    rememberPasswordStep(null)
   }
 
   const handleSetPassword = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -188,8 +191,11 @@ function SetPasswordContent() {
 
       if (error) throw error
 
+      // The link's `next`; without it (the page was left and opened again) the continuation kept
+      // by /auth/callback for this step. Read before clearLocks removes it.
+      const nextPath = linkNext || readPasswordStep() || '/profile'
       clearLocks()
-      router.replace(nextPath)
+      router.replace(userId ? await resolveAccessibleDestination(nextPath, userId) : nextPath)
       router.refresh()
     } catch (error: unknown) {
       setErr(`Не удалось установить пароль: ${getErrorMessage(error)}`)

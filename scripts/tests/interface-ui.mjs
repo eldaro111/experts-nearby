@@ -4,6 +4,8 @@
 // Two builds are made: NEXT_PUBLIC_AD_SLOTS=demo for the ad checks, then the default (off) build.
 // Usage: PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=<chromium/edge> node scripts/tests/interface-ui.mjs
 // Iteration only: INTERFACE_SKIP_ADS=1 INTERFACE_SKIP_BUILD=1 reuse the current default build.
+// Low-memory machines: INTERFACE_ONLY_ADS=1 INTERFACE_SKIP_BUILD=1 run only the ad phase on an existing
+// NEXT_PUBLIC_AD_SLOTS=demo build; then the main phase with INTERFACE_SKIP_ADS=1 on a default build.
 import assert from 'node:assert/strict'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { appEnv, buildApp, checker, createBackend, launchBrowser, newContext, noHorizontalOverflow, root, startApp } from './ui-harness.mjs'
@@ -111,7 +113,7 @@ try {
   // INTERFACE_SKIP_ADS=1 skips this phase while iterating; full runs keep it.
   if (process.env.INTERFACE_SKIP_ADS !== '1') {
     const env = appEnv(PORT, { NEXT_PUBLIC_AD_SLOTS: 'demo' })
-    await buildApp(env)
+    if (process.env.INTERFACE_SKIP_BUILD !== '1') await buildApp(env)
     server = await startApp(PORT, env)
     const base = server.base
     const backend = freshBackend()
@@ -123,8 +125,8 @@ try {
           await page.goto(base + route)
           const slot = page.locator(`[data-ad-slot="${id}"]`)
           await slot.waitFor()
-          assert.equal(await slot.getAttribute('aria-label'), 'Рекламное место')
-          assert.ok((await slot.innerText()).includes('Демонстрационный блок · не реклама'))
+          assert.equal(await slot.getAttribute('aria-label'), 'Место для размещения партнёра')
+          assert.ok((await slot.innerText()).includes('Демонстрационная заглушка · не реклама'))
           const box = await slot.locator('.ad-slot-box').boundingBox()
           assert.ok(Math.abs(box.width - size[0]) <= 1 && Math.abs(box.height - size[1]) <= 1, `${route} ${width}: ${box.width}x${box.height}`)
           assert.ok(await noHorizontalOverflow(page), `${route} overflow at ${width}`)
@@ -148,6 +150,14 @@ try {
       assert.deepEqual(backend.externalBlocked.filter((url) => !url.startsWith('ws:')), [])
     })
     server.stop()
+    server = null
+  }
+
+  if (process.env.INTERFACE_ONLY_ADS === '1') {
+    await check('no browser runtime errors', async () => assert.deepEqual(errors, []))
+    console.log('PASS', results.length, 'ad phase checks (mock API)')
+    await browser.close()
+    process.exit(0)
   }
 
   // ===================== Phase 2: default build (ads off) =====================
@@ -175,8 +185,9 @@ try {
       assert.ok(hrefs.length >= 8, hrefs.join(','))
       for (const href of hrefs) assert.equal((await page.request.get(base + href)).status(), 200, href)
       assert.equal(await page.locator('main a a, main a button, main button a').count(), 0)
-      // Descriptive tiles in the hero panel are not links and do not react to hover like links.
+      // Hero panel shortcuts are buttons (they choose a project first), not nested links.
       assert.equal(await page.locator('.workspace-features a').count(), 0)
+      assert.equal(await page.locator('.workspace-features button[data-workspace-shortcut]').count(), 3)
       await settle(page); await page.screenshot({ path: `${out}/home-1440.png` })
     })
     await check('motion: short one-off block animation, toasts and menus animate', async () => {
@@ -480,6 +491,7 @@ try {
       await page.mouse.up()
       await page.getByRole('alert').filter({ hasText: 'Проект завершён' }).waitFor()
       await page.waitForFunction(() => !document.querySelector('.gantt-bar.is-saving'))
+      await settle(page)
       assert.ok(Math.abs((await boxOf(bar('Расчёт привода'))).x - left) <= 1)
       assert.equal(taskRow(backend, 'G1').start_at, before.start_at)
     })
@@ -582,11 +594,21 @@ try {
       }
       const expected = await page.evaluate(iso => new Date(iso).toLocaleString(), row.due_at)
       assert.ok((await page.locator('section[data-drop-status="done"] .task-card', { hasText: 'Расчёт привода' }).innerText()).includes(expected))
-      const items = page.locator('.calendar-grid [title]').filter({ hasText: 'Расчёт привода' })
+      const chips = page.locator('.calendar-grid .calendar-day .space-y-1 > div')
+      const items = chips.filter({ hasText: 'Расчёт привода' })
       assert.ok(await items.count() >= 1)
       assert.ok((await items.allTextContents()).every(t => t.includes('Готово')))
-      assert.ok((await items.evaluateAll(nodes => nodes.map(n => n.title))).some(t => t.includes(expected)))
-      assert.equal(await page.locator('.calendar-grid [title]').filter({ hasText: 'Испытания' }).count(), 0)
+      // The day panel shows the saved deadline time of the same task.
+      const dueTime = await page.evaluate(iso => new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }), row.due_at)
+      const day = page.locator('.calendar-day', { has: page.locator('.space-y-1 > div', { hasText: 'Дедлайн' }).filter({ hasText: 'Расчёт привода' }) })
+      await day.locator('.calendar-day-trigger').focus()
+      const panel = page.getByRole('dialog', { name: /задачи и события/ })
+      await panel.waitFor()
+      const panelText = await panel.innerText()
+      assert.ok(panelText.includes('Расчёт привода') && panelText.includes(dueTime) && panelText.includes('Статус: Готово'), panelText)
+      await page.keyboard.press('Escape')
+      await panel.waitFor({ state: 'detached' })
+      assert.equal(await chips.filter({ hasText: 'Испытания' }).count(), 0)
     })
     await check('integration: schedule permission failure restores dates; structured history shows Russian labels', async () => {
       const before = taskRow(backend, 'G1').due_at

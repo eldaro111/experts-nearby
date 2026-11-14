@@ -4,7 +4,7 @@
 // Model facts: tasks.start_at / due_at are timestamptz (time of day is kept), shown in the device
 // time zone like the rest of the workspace. Dragging moves by whole local calendar days and keeps
 // the time of day. The schedule RPC checks previous dates and writes history atomically.
-import { useMemo, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { CalendarPlus } from 'lucide-react'
 import { createNotification } from '@/lib/notifications'
 import { logAppError, showAppMessage } from '@/lib/appFeedback'
@@ -89,6 +89,7 @@ export function ProjectGantt({
   readOnly,
   projectDeadline,
   onTasksChanged,
+  onOpenTask,
 }: {
   projectId: string
   currentUserId: string | null | undefined
@@ -97,6 +98,8 @@ export function ProjectGantt({
   readOnly: boolean
   projectDeadline: string | null
   onTasksChanged?: () => Promise<void>
+  /** Opens the task view shared with the calendar. */
+  onOpenTask?: (taskId: string) => void
 }) {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
   const [savingIds, setSavingIds] = useState<string[]>([])
@@ -104,6 +107,14 @@ export function ProjectGantt({
   const [assigning, setAssigning] = useState<{ taskId: string; snapshot: Task; start: string; due: string } | null>(null)
   const [announcement, setAnnouncement] = useState('')
   const [nowTime] = useState(() => Date.now())
+  // After release the bar glides from the pointer position to the whole-day position.
+  const [settlingId, setSettlingId] = useState<string | null>(null)
+  const settleTimer = useRef(0)
+  // Pointer bookkeeping that must not re-render the chart on every move.
+  const press = useRef<{ taskId: string; track: HTMLElement | null; moved: boolean; width: number } | null>(null)
+  const suppressClick = useRef(false)
+
+  useEffect(() => () => window.clearTimeout(settleTimer.current), [])
 
   const canEdit = !readOnly && Boolean(onTasksChanged)
   const memberName = (id: string | null) => (id ? members.find((m) => m.user_id === id)?.display_name || 'Участник' : 'Не назначен')
@@ -167,8 +178,27 @@ export function ProjectGantt({
     setSavingIds((ids) => ids.filter((id) => id !== task.id))
   }
 
+  // The pixel offset lives in CSS variables of the row track: the bar and its date label follow the
+  // pointer continuously, while dates (and the request on release) change by whole days only.
+  const setOffset = (track: HTMLElement | null, mode: Mode, dx: number, width: number) => {
+    if (!track) return
+    track.style.setProperty('--gantt-dx', mode === 'move' ? `${dx}px` : '0px')
+    track.style.setProperty('--gantt-dl', mode === 'start' ? `${Math.min(dx, width)}px` : '0px')
+    track.style.setProperty('--gantt-dr', mode === 'end' ? `${Math.max(dx, -width)}px` : '0px')
+  }
+  const clearOffset = (track: HTMLElement | null) => {
+    for (const name of ['--gantt-dx', '--gantt-dl', '--gantt-dr']) track?.style.removeProperty(name)
+  }
+  const settle = (taskId: string) => {
+    setSettlingId(taskId)
+    window.clearTimeout(settleTimer.current)
+    settleTimer.current = window.setTimeout(() => setSettlingId(null), 260)
+  }
+
   const onPointerDown = (event: PointerEvent<HTMLElement>, task: Task) => {
-    if (!canEdit || event.button !== 0 || savingIds.includes(task.id)) return
+    if (event.button !== 0) return
+    press.current = { taskId: task.id, track: event.currentTarget.parentElement, moved: false, width: event.currentTarget.offsetWidth }
+    if (!canEdit || savingIds.includes(task.id)) return
     const handle = (event.target as HTMLElement).closest<HTMLElement>('[data-mode]')
     let mode = (handle?.dataset.mode as Mode | undefined) || 'move'
     if (mode === 'start' && !task.start_at) mode = 'move'
@@ -180,26 +210,52 @@ export function ProjectGantt({
   }
   const onPointerMove = (event: PointerEvent<HTMLElement>, task: Task) => {
     if (!drag || drag.taskId !== task.id) return
-    const daysMoved = Math.round((event.clientX - drag.originX) / DAY_WIDTH)
+    const dx = event.clientX - drag.originX
+    const pressed = press.current
+    // A few pixels of hand tremor are still a click, not a drag.
+    if (pressed && Math.abs(dx) >= 4) pressed.moved = true
+    if (pressed?.moved) setOffset(pressed.track, drag.mode, dx, pressed.width)
+    const daysMoved = Math.round(dx / DAY_WIDTH)
     if (daysMoved === drag.days) return
     setDrag({ ...drag, days: daysMoved })
     setDrafts((d) => ({ ...d, [task.id]: applyDays(drag.snapshot, drag.mode, daysMoved) }))
   }
   const onPointerUp = (task: Task) => {
+    const pressed = press.current
+    if (pressed?.moved) {
+      // The click that follows a drag or resize must not open the task.
+      suppressClick.current = true
+      window.setTimeout(() => { suppressClick.current = false }, 80)
+    }
     if (!drag || drag.taskId !== task.id) return
     const { mode, days: moved, snapshot } = drag
+    clearOffset(pressed?.track ?? null)
+    if (pressed?.moved) settle(task.id)
     setDrag(null)
     if (moved === 0) { setDrafts((d) => { const copy = { ...d }; delete copy[task.id]; return copy }); return }
     void persist(snapshot, applyDays(snapshot, mode, moved))
   }
   const onPointerCancel = (task: Task) => {
+    clearOffset(press.current?.track ?? null)
+    if (press.current?.moved) settle(task.id)
+    press.current = null
     setDrag(null)
     setDrafts((d) => { const copy = { ...d }; delete copy[task.id]; return copy })
     setAnnouncement(`Перемещение задачи «${task.title}» отменено.`)
   }
+  const onClick = (task: Task) => {
+    if (suppressClick.current) { suppressClick.current = false; return }
+    onOpenTask?.(task.id)
+  }
   const onKeyDown = (event: KeyboardEvent<HTMLElement>, task: Task) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      if (drag) return
+      event.preventDefault()
+      onOpenTask?.(task.id)
+      return
+    }
     if (!canEdit) return
-    if (event.key === 'Escape' && drag?.taskId === task.id) { onPointerCancel(task); return }
+    if (event.key === 'Escape' && drag?.taskId === task.id) { suppressClick.current = true; window.setTimeout(() => { suppressClick.current = false }, 400); onPointerCancel(task); return }
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
     event.preventDefault()
     if (savingIds.includes(task.id)) return
@@ -230,8 +286,8 @@ export function ProjectGantt({
           <h3 className="font-semibold">Диаграмма Ганта</h3>
           <p className="text-sm text-gray-500">
             {canEdit
-              ? 'Перетащите полосу, чтобы сдвинуть задачу целиком, или её край, чтобы изменить начало или дедлайн. Шаг — один день, время суток сохраняется. С клавиатуры: стрелки — сдвиг, Shift+стрелки — дедлайн, Alt+стрелки — начало.'
-              : 'Просмотр сроков задач. Изменение недоступно.'}
+              ? 'Перетащите полосу, чтобы сдвинуть задачу целиком, или её край, чтобы изменить начало или дедлайн. Шаг — один день, время суток сохраняется. Нажатие на полосу открывает задачу. С клавиатуры: Enter — открыть, стрелки — сдвиг, Shift+стрелки — дедлайн, Alt+стрелки — начало.'
+              : 'Просмотр сроков задач. Изменение недоступно; нажатие на полосу открывает задачу.'}
           </p>
         </div>
         <p className="text-xs text-gray-500 shrink-0">Время — в часовом поясе устройства</p>
@@ -269,14 +325,18 @@ export function ProjectGantt({
               const draft = displayed(task)
               const isDragging = drag?.taskId === task.id
               const isSaving = savingIds.includes(task.id)
-              const start = draft.start ? new Date(draft.start).getTime() : null
-              const due = draft.due ? new Date(draft.due).getTime() : null
+              // While dragging, the bar is drawn from the dates it had at the start plus the pixel
+              // offset; `draft` holds the whole-day dates shown in the label.
+              const shown = isDragging && drag ? { start: drag.snapshot.start_at, due: drag.snapshot.due_at } : draft
+              const start = shown.start ? new Date(shown.start).getTime() : null
+              const due = shown.due ? new Date(shown.due).getTime() : null
               const single = start === null || due === null
               const left = xOf((start ?? due) as number, days)
               const right = xOf((due ?? start) as number, days)
               const width = Math.max(right - left, single ? 0 : 6)
               const done = task.status === 'done'
-              const overdue = !done && due !== null && due < nowTime
+              const draftDue = draft.due ? new Date(draft.due).getTime() : null
+              const overdue = !done && draftDue !== null && draftDue < nowTime
               const label = `${task.title}. ${boardStatusLabel(task.status)}. Начало: ${formatMoment(draft.start)}. Дедлайн: ${formatMoment(draft.due)}. Исполнитель: ${memberName(task.assignee_id)}.`
               return (
                 <div key={task.id} className="gantt-row" style={{ gridTemplateColumns: `var(--gantt-label) ${trackWidth}px` }}>
@@ -292,21 +352,26 @@ export function ProjectGantt({
                       role="button"
                       tabIndex={0}
                       aria-label={label}
-                      aria-disabled={!canEdit || isSaving || undefined}
+                      aria-disabled={isSaving || undefined}
                       aria-busy={isSaving || undefined}
-                      className={`gantt-bar ${single ? 'is-point' : ''} ${done ? 'is-done' : ''} ${overdue ? 'is-overdue' : ''} ${isDragging ? 'is-dragging' : ''} ${isSaving ? 'is-saving' : ''} ${canEdit ? 'is-editable' : ''}`}
-                      style={{ left: single ? left - 9 : left, width: single ? 18 : width }}
+                      data-gantt-task={task.id}
+                      className={`gantt-bar ${single ? 'is-point' : ''} ${done ? 'is-done' : ''} ${overdue ? 'is-overdue' : ''} ${isDragging ? 'is-dragging' : ''} ${isSaving ? 'is-saving' : ''} ${settlingId === task.id ? 'is-settling' : ''} ${canEdit ? 'is-editable' : ''}`}
+                      style={single
+                        ? { left: left - 9, width: 18 }
+                        : { left: `calc(${left}px + var(--gantt-dl, 0px))`, width: `max(6px, calc(${width}px - var(--gantt-dl, 0px) + var(--gantt-dr, 0px)))` }}
                       onPointerDown={(event) => onPointerDown(event, task)}
                       onPointerMove={(event) => onPointerMove(event, task)}
                       onPointerUp={() => onPointerUp(task)}
                       onPointerCancel={() => onPointerCancel(task)}
+                      onClick={() => onClick(task)}
                       onKeyDown={(event) => onKeyDown(event, task)}
                     >
+                      {!single && <span className="gantt-bar-title" aria-hidden="true">{task.title}</span>}
                       {canEdit && !single && <span className="gantt-handle is-start" data-mode="start" aria-hidden="true" />}
                       {canEdit && !single && <span className="gantt-handle is-end" data-mode="end" aria-hidden="true" />}
                     </div>
                     {(isDragging || isSaving) && (
-                      <div className="gantt-preview" style={{ left: Math.max(0, left) }} role="status">
+                      <div className="gantt-preview" style={{ left: `calc(${Math.max(0, left)}px + var(--gantt-dl, 0px))` }} role="status">
                         {isSaving ? 'Сохраняем… ' : ''}{formatMoment(draft.start)} — {formatMoment(draft.due)}
                       </div>
                     )}

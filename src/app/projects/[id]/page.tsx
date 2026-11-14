@@ -2,8 +2,8 @@
 
 import { PageLoading } from '@/components/PageState'
 
-import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { logAppError, showAppError, showAppMessage } from '@/lib/appFeedback'
 import { ProjectCompletion } from '@/components/project/ProjectCompletion'
@@ -18,6 +18,10 @@ import { ProjectCalendar } from '@/components/project/ProjectCalendar'
 import { ProjectDocuments } from '@/components/project/ProjectDocuments'
 import { ProjectActivity } from '@/components/project/ProjectActivity'
 import { ProjectReviews } from '@/components/project/ProjectReviews'
+import { TaskDetails } from '@/components/project/TaskDetails'
+import { rememberCurrentProject } from '@/lib/myProjects'
+import { signInHref } from '@/lib/safeRedirect'
+import { useHashScroll } from '@/lib/useHashScroll'
 
 import type {
   Listing,
@@ -28,6 +32,8 @@ import type {
 export default function ProjectWorkspacePage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
 
   const [loading, setLoading] = useState(true)
   const [hasAccess, setHasAccess] = useState(false)
@@ -146,7 +152,8 @@ export default function ProjectWorkspacePage() {
       } = await supabase.auth.getUser()
 
       if (!user) {
-        router.replace('/auth')
+        // Sign-in returns to the same project, task and section.
+        router.replace(signInHref(`${window.location.pathname}${window.location.search}${window.location.hash}`))
         return
       }
 
@@ -194,6 +201,8 @@ export default function ProjectWorkspacePage() {
       setHasAccess(access)
 
       if (access) {
+        // The project opened last is the «current» one for the home page shortcuts (this browser only).
+        rememberCurrentProject(user.id, project.id)
         await loadMembers(project)
       }
 
@@ -270,6 +279,45 @@ export default function ProjectWorkspacePage() {
       setSavingProjectDeadline(false)
     }
   }
+
+  // /projects/[id]#plan and #materials arrive before the sections are loaded.
+  useHashScroll(!loading && hasAccess && !tasksLoading)
+
+  // One task view for the calendar, the Gantt chart and direct links: /projects/[id]?task=<taskId>.
+  // The address changes, so «Назад» closes the task and a link can be shared inside the team.
+  const openTaskId = searchParams.get('task')
+  const openedHere = useRef(false)
+  const [revealTaskId, setRevealTaskId] = useState<string | null>(null)
+
+  const openTask = useCallback((taskId: string) => {
+    openedHere.current = true
+    router.push(`${pathname}?task=${encodeURIComponent(taskId)}`, { scroll: false })
+  }, [pathname, router])
+
+  const closeTask = useCallback(() => {
+    if (openedHere.current) {
+      openedHere.current = false
+      router.back()
+    } else {
+      // Opened by a direct link: stay in the project, the previous page remains one step back.
+      router.replace(pathname, { scroll: false })
+    }
+  }, [pathname, router])
+
+  useEffect(() => { if (!openTaskId) openedHere.current = false }, [openTaskId])
+
+  useEffect(() => {
+    if (openTaskId || !revealTaskId) return
+    const frame = requestAnimationFrame(() => {
+      const card = document.querySelector<HTMLElement>(`[data-task-card="${CSS.escape(revealTaskId)}"]`)
+      card?.scrollIntoView({ block: 'center' })
+      card?.querySelector<HTMLElement>('[data-task-grip]')?.focus({ preventScroll: true })
+      card?.classList.add('is-revealed')
+      window.setTimeout(() => card?.classList.remove('is-revealed'), 1600)
+      setRevealTaskId(null)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [openTaskId, revealTaskId])
 
   if (loading) return <PageLoading />
 
@@ -370,6 +418,7 @@ export default function ProjectWorkspacePage() {
               tasks={tasks}
               projectProgress={projectProgress}
               onTasksChanged={refreshTasks}
+              onOpenTask={openTask}
             />
           </section>
 
@@ -414,6 +463,14 @@ export default function ProjectWorkspacePage() {
           </section>
         </div>
       </div>
+
+      <TaskDetails
+        open={Boolean(openTaskId) && !tasksLoading}
+        task={tasks.find((task) => task.id === openTaskId) || null}
+        members={members}
+        onClose={closeTask}
+        onShowOnBoard={(taskId) => { setRevealTaskId(taskId); closeTask() }}
+      />
 
       <FloatingProjectChat
         projectId={id}

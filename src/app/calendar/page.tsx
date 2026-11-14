@@ -11,6 +11,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { getAppErrorMessage, logAppError } from '@/lib/appFeedback'
+import { signInHref } from '@/lib/safeRedirect'
+import { boardStatusLabel } from '@/lib/taskLabels'
+import { CalendarDay, momentTime, rangeTime, type CalendarDayItem } from '@/components/calendar/CalendarDay'
 
 type Listing = {
   id: string
@@ -67,6 +70,8 @@ type CalendarEntry = {
   href: string
   isOverdue: boolean
   status?: string
+  assigneeId?: string | null
+  createdBy?: string | null
 }
 
 function unique(values: string[]) {
@@ -111,11 +116,9 @@ function sameLocalDay(value: string, date: Date) {
   )
 }
 
+// Same labels as the task board, the Gantt chart and the project history.
 function taskStatusLabel(status: string) {
-  if (status === 'todo') return 'К выполнению'
-  if (status === 'doing') return 'В работе'
-  if (status === 'done') return 'Готово'
-  return status
+  return boardStatusLabel(status)
 }
 
 function eventTypeLabel(type: string) {
@@ -179,6 +182,7 @@ export default function CalendarPage() {
   const [projects, setProjects] = useState<Listing[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [events, setEvents] = useState<ProjectEvent[]>([])
+  const [names, setNames] = useState<Record<string, string>>({})
   const [errors, setErrors] = useState<string[]>([])
 
   const [projectFilter, setProjectFilter] = useState('all')
@@ -211,7 +215,7 @@ export default function CalendarPage() {
     if (!currentUser) {
       setRefreshing(false)
       setLoading(false)
-      router.replace('/auth')
+      router.replace(signInHref('/calendar'))
       return
     }
 
@@ -284,9 +288,28 @@ export default function CalendarPage() {
       nextEvents = (eventsRes.data || []) as ProjectEvent[]
     }
 
+    // Names for the day panel: task assignees and event authors of the loaded projects.
+    const peopleIds = unique([
+      ...nextTasks.map((task) => task.assignee_id || ''),
+      ...nextEvents.map((event) => event.created_by || ''),
+    ])
+    let nextNames: Record<string, string> = {}
+    if (peopleIds.length > 0) {
+      const { data, error } = await supabase
+        .from('profiles_collaboration')
+        .select('user_id, display_name')
+        .in('user_id', peopleIds)
+      // Names are optional: without them the panel says that the name is unavailable.
+      if (error) logAppError('Имена участников для календаря', error)
+      nextNames = Object.fromEntries(((data || []) as { user_id: string; display_name: string | null }[])
+        .filter((row) => row.display_name)
+        .map((row) => [row.user_id, row.display_name as string]))
+    }
+
     setProjects(availableProjects)
     setTasks(nextTasks)
     setEvents(nextEvents)
+    setNames(nextNames)
     setErrors(nextErrors)
     setRefreshing(false)
     setLoading(false)
@@ -319,7 +342,7 @@ export default function CalendarPage() {
           subtitle: 'Дедлайн проекта',
           date: project.deadline_at || '',
           endDate: project.deadline_at || null,
-          href: `/projects/${project.id}`,
+          href: `/projects/${project.id}#project-top`,
           isOverdue: Boolean(deadlineTime && now > deadlineTime),
         }
       })
@@ -340,9 +363,10 @@ export default function CalendarPage() {
           subtitle: `Старт задачи · ${taskStatusLabel(task.status)}`,
           date: task.start_at,
           endDate: task.start_at,
-          href: `/projects/${task.project_id}`,
+          href: `/projects/${task.project_id}?task=${encodeURIComponent(task.id)}`,
           isOverdue: false,
           status: task.status,
+          assigneeId: task.assignee_id,
         })
       }
 
@@ -357,9 +381,10 @@ export default function CalendarPage() {
           subtitle: `Дедлайн задачи · ${taskStatusLabel(task.status)}`,
           date: task.due_at,
           endDate: task.due_at,
-          href: `/projects/${task.project_id}`,
+          href: `/projects/${task.project_id}?task=${encodeURIComponent(task.id)}`,
           isOverdue: isTaskOverdue(task),
           status: task.status,
+          assigneeId: task.assignee_id,
         })
       }
 
@@ -381,9 +406,11 @@ export default function CalendarPage() {
           title: event.title,
           subtitle: event.description || eventTypeLabel(event.event_type),
           date: event.starts_at || '',
-          endDate: event.ends_at || event.starts_at,
-          href: `/projects/${event.project_id}`,
+          // Only a stored end is kept; the start is not repeated as an invented end.
+          endDate: event.ends_at || null,
+          href: `/projects/${event.project_id}#event-${event.id}`,
           isOverdue: false,
+          createdBy: event.created_by,
         }
       })
 
@@ -446,6 +473,31 @@ export default function CalendarPage() {
 
   const entriesForDate = (date: Date) => {
     return filteredEntries.filter((entry) => sameLocalDay(entry.date, date))
+  }
+
+  // Details for the day panel. A task assignee is shown as the assignee only; events have no stored
+  // list of invited people, so none is shown.
+  const toDayItem = (entry: CalendarEntry): CalendarDayItem => {
+    const isTask = entry.kind === 'task-start' || entry.kind === 'task-due'
+    return {
+      id: entry.id,
+      tone: entry.kind,
+      label: entryTypeLabel(entry),
+      title: entry.title,
+      time: entry.kind === 'event' ? rangeTime(entry.date, entry.endDate) : momentTime(entry.date),
+      project: entry.projectTitle,
+      status: isTask && entry.status ? taskStatusLabel(entry.status) : null,
+      overdue: entry.isOverdue,
+      people: isTask
+        ? { label: 'Исполнитель', value: entry.assigneeId ? names[entry.assigneeId] || (entry.assigneeId === userId ? 'Вы' : 'имя недоступно') : 'не назначен' }
+        : entry.kind === 'event' && entry.createdBy && names[entry.createdBy]
+          ? { label: 'Автор события', value: names[entry.createdBy] }
+          : null,
+      action: {
+        label: isTask ? 'Открыть задачу' : entry.kind === 'event' ? 'К событию в проекте' : 'К проекту',
+        href: entry.href,
+      },
+    }
   }
 
   if (loading) return <PageLoading />
@@ -595,20 +647,18 @@ export default function CalendarPage() {
               const isToday = sameLocalDay(today.toISOString(), cell.date)
 
               return (
-                <div
+                <CalendarDay
                   key={cell.id}
+                  date={cell.date}
+                  items={dateEntries.map(toDayItem)}
                   className={`min-h-[120px] rounded-lg border bg-white p-2 ${isToday ? 'border-blue-500 ring-1 ring-blue-200' : 'border-gray-200'}`}
+                  numberClassName={`mb-2 text-xs font-semibold ${isToday ? 'text-blue-700' : 'text-gray-700'}`}
                 >
-                  <div className={`mb-2 text-xs font-semibold ${isToday ? 'text-blue-700' : 'text-gray-700'}`}>
-                    {cell.date.getDate()}
-                  </div>
-
                   <div className="space-y-1">
                     {dateEntries.slice(0, 3).map((entry) => (
                       <Link
                         key={entry.id}
                         href={entry.href}
-                        title={`${entryTypeLabel(entry)} · ${entry.projectTitle}`}
                         className={`block rounded border px-2 py-1 text-xs leading-tight transition hover:brightness-95 ${entryClassName(entry)}`}
                       >
                         <div className="truncate font-medium">{entry.title}</div>
@@ -620,7 +670,7 @@ export default function CalendarPage() {
                       <div className="text-xs text-gray-500">+ ещё {dateEntries.length - 3}</div>
                     )}
                   </div>
-                </div>
+                </CalendarDay>
               )
             })}
           </div>

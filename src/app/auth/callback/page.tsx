@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { nextStepAfterSignIn, passwordStepHref, rememberPasswordStep, safeReturnPath, takePendingReturn } from '@/lib/authReturn'
+import { resolveAccessibleDestination } from '@/lib/projectAccess'
 
 function getHashParams() {
   const hash =
@@ -47,6 +49,11 @@ export default function AuthCallbackPage() {
         url.searchParams.get('type') ||
         hashParams.get('type') ||
         ''
+
+      // Destination chosen before sign-in: the link's `next`, else the copy kept in this browser.
+      // The kept copy is removed either way, so it cannot be reused by a later sign-in.
+      const pending = takePendingReturn()
+      const destination = safeReturnPath(url.searchParams.get('next')) ?? pending
 
       const code = url.searchParams.get('code')
       const accessToken = hashParams.get('access_token')
@@ -122,33 +129,35 @@ export default function AuthCallbackPage() {
             )
           }
 
+          // The new password comes first; set-password then opens onboarding or the destination.
+          // The continuation is kept with the marker, so leaving the password page does not lose it.
+          const nextPath = nextStepAfterSignIn(Boolean(profile), destination)
+          rememberPasswordStep(nextPath)
+
           document.cookie =
             'needs_pw_reset=1; Path=/; Max-Age=1800; SameSite=Lax'
 
-          const nextPath = profile ? '/profile' : '/onboarding'
-
-          router.replace(
-            `/auth/set-password?next=${encodeURIComponent(nextPath)}`
-          )
+          router.replace(passwordStepHref(nextPath))
           return
         }
 
         if (!profile) {
           if (type === 'magiclink' || type === 'invite') {
+            const nextPath = nextStepAfterSignIn(false, destination)
+            rememberPasswordStep(nextPath)
+
             document.cookie =
               'needs_pw_setup=1; Path=/; Max-Age=1800; SameSite=Lax'
 
-            router.replace(
-              '/auth/set-password?next=%2Fonboarding'
-            )
+            router.replace(passwordStepHref(nextPath))
             return
           }
 
-          router.replace('/onboarding')
+          router.replace(nextStepAfterSignIn(false, destination))
           return
         }
 
-        router.replace('/profile')
+        router.replace(destination ? await resolveAccessibleDestination(destination, user.id) : '/profile')
       } catch (callbackError: unknown) {
         if (cancelled) return
 

@@ -57,8 +57,54 @@ export function launchBrowser() {
   })
 }
 
-/** In-memory backend. `tables` is mutated by PATCH/POST/DELETE so reloads see saved data. */
-export function createBackend(tables, { userId, email = 'test@example.ru', rpc = {} } = {}) {
+/** PostgREST `ilike` pattern (`%` or `*` any run, `_` one char, backslash escapes) as a RegExp. */
+function likeRegExp(pattern) {
+  const literal = (char) => char.replace(/[.*+?^${}()|[\]\\]/g, (c) => `\\${c}`)
+  let source = ''
+  for (let i = 0; i < pattern.length; i += 1) {
+    const char = pattern[i]
+    if (char === '\\' && i + 1 < pattern.length) { source += literal(pattern[i + 1]); i += 1 }
+    else if (char === '%' || char === '*') source += '.*'
+    else if (char === '_') source += '.'
+    else source += literal(char)
+  }
+  return new RegExp(`^${source}$`, 'is')
+}
+
+/** Rows ordered like PostgREST `order=a.desc.nullsfirst,b.asc` (PostgreSQL default: nulls last for asc). */
+function orderRows(rows, order) {
+  const keys = order.split(',').filter(Boolean).map((part) => {
+    const [column, ...flags] = part.split('.')
+    const desc = flags.includes('desc')
+    const nullsFirst = flags.includes('nullsfirst') ? true : flags.includes('nullslast') ? false : desc
+    return { column, desc, nullsFirst }
+  })
+  return rows
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => {
+      for (const { column, desc, nullsFirst } of keys) {
+        const x = a.row[column]
+        const y = b.row[column]
+        const xNull = x === null || x === undefined
+        const yNull = y === null || y === undefined
+        if (xNull || yNull) {
+          if (xNull && yNull) continue
+          return (xNull ? -1 : 1) * (nullsFirst ? 1 : -1)
+        }
+        if (x < y) return desc ? 1 : -1
+        if (x > y) return desc ? -1 : 1
+      }
+      return a.index - b.index
+    })
+    .map(({ row }) => row)
+}
+
+/**
+ * In-memory backend. `tables` is mutated by PATCH/POST/DELETE so reloads see saved data.
+ * `strictQueries: true` also applies `order`, `offset`/`limit` and `ilike` like PostgREST; it is opt-in
+ * so suites written against the simpler mock keep their exact behaviour.
+ */
+export function createBackend(tables, { userId, email = 'test@example.ru', rpc = {}, strictQueries = false } = {}) {
   const backend = {
     userId,
     tables,
@@ -123,12 +169,23 @@ export function createBackend(tables, { userId, email = 'test@example.ru', rpc =
             const list = value.slice(4, -1).split(',').map((item) => item.replace(/^"|"$/g, ''))
             if (!list.includes(String(row[key]))) return false
           }
+          if (strictQueries && value.startsWith('ilike.')) {
+            if (row[key] === null || row[key] === undefined || !likeRegExp(value.slice(6)).test(String(row[key]))) return false
+          }
         }
         return true
       }
       let data
       if (method === 'GET' || method === 'HEAD') {
-        data = structuredClone(rows.filter(matches))
+        let found = rows.filter(matches)
+        if (strictQueries) {
+          const order = u.searchParams.get('order')
+          if (order) found = orderRows(found, order)
+          const offset = Number(u.searchParams.get('offset') || 0)
+          const limit = u.searchParams.has('limit') ? Number(u.searchParams.get('limit')) : Infinity
+          found = found.slice(offset, offset + limit)
+        }
+        data = structuredClone(found)
       } else if (method === 'PATCH') {
         const patch = req.postDataJSON() || {}
         data = []
