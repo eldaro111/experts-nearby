@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { X } from 'lucide-react'
+import { useT } from '@/components/LocaleProvider'
 
 /**
  * Modal window on the native <dialog>: the browser provides the focus trap, Escape, inert background
@@ -14,7 +15,7 @@ export function Modal({
   description,
   children,
   className = '',
-  closeLabel = 'Закрыть',
+  closeLabel,
 }: {
   open: boolean
   onClose: () => void
@@ -24,6 +25,7 @@ export function Modal({
   className?: string
   closeLabel?: string
 }) {
+  const t = useT()
   const ref = useRef<HTMLDialogElement>(null)
   const titleId = useId()
   const descriptionId = useId()
@@ -52,7 +54,7 @@ export function Modal({
               <h2 id={titleId} className="app-modal-title">{title}</h2>
               {description && <p id={descriptionId} className="app-modal-description">{description}</p>}
             </div>
-            <button type="button" className="app-modal-close" aria-label={closeLabel} onClick={onClose}>
+            <button type="button" className="app-modal-close" aria-label={closeLabel ?? t('Закрыть')} onClick={onClose}>
               <X size={20} aria-hidden="true" />
             </button>
           </div>

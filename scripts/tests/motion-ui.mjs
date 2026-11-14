@@ -292,8 +292,23 @@ try {
       const button = shortcut('Команда')
       await button.waitFor()
       assert.equal(await page.locator('.hero-workspace a button, .hero-workspace button a, .hero-workspace a a, .hero-workspace button button').count(), 0)
+      // Hover only after the signed-in layout is complete (work navigation, current project line):
+      // a later layout shift moves the button away from the pointer and drops :hover.
+      await page.getByText('Проект: Датчик давления').waitFor()
+      await page.getByRole('navigation', { name: 'Рабочие разделы' }).waitFor()
+      await settle(page)
       const before = await button.evaluate((el) => getComputedStyle(el).backgroundColor)
       await button.hover()
+      // The :hover transition may start a frame after hover(); wait for its end value, not a snapshot.
+      await button.evaluate((el) => new Promise((resolve, reject) => {
+        const started = performance.now()
+        const tick = () => {
+          if (/matrix\(1, 0, 0, 1, 0, -2\)/.test(getComputedStyle(el).transform)) resolve(null)
+          else if (performance.now() - started > 3000) reject(new Error(`hover lift not reached: ${getComputedStyle(el).transform}`))
+          else requestAnimationFrame(tick)
+        }
+        tick()
+      }))
       await settle(page)
       const hovered = await button.evaluate((el) => [getComputedStyle(el).transform, getComputedStyle(el).backgroundColor])
       assert.ok(/matrix\(1, 0, 0, 1, 0, -2\)/.test(hovered[0]), hovered[0])

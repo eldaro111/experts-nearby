@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { FormEvent, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
+import { authCallbackUrl, destinationOfStep, readPasswordStep, rememberPasswordStep } from '@/lib/authReturn'
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
@@ -58,12 +59,21 @@ export default function ResetPasswordPage() {
     setLoading(true)
 
     try {
-      // Удаляем старый локальный маркер, если пользователь раньше уже проходил recovery.
-      document.cookie =
-        'needs_pw_reset=; Path=/; Max-Age=0; SameSite=Lax'
+      // При действующей сессии маркер — это обязательный шаг начатого восстановления: он остаётся до
+      // сохранения нового пароля на /auth/set-password (иначе отправка письма здесь позволяла бы уйти
+      // без нового пароля), а новое письмо ведёт в тот же выбранный раздел. Без сессии старый
+      // маркер только блокирует страницы, поэтому, как и раньше, удаляется.
+      const { data: sessionData } = await supabase.auth.getSession()
+      let destination: string | null = null
+      if (sessionData.session) {
+        destination = destinationOfStep(readPasswordStep())
+      } else {
+        document.cookie =
+          'needs_pw_reset=; Path=/; Max-Age=0; SameSite=Lax'
+        rememberPasswordStep(null)
+      }
 
-      const redirectTo =
-        `${window.location.origin}/auth/callback?type=recovery`
+      const redirectTo = authCallbackUrl(window.location.origin, 'recovery', destination)
 
       const { error: resetError } =
         await supabase.auth.resetPasswordForEmail(normalizedEmail, {

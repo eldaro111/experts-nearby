@@ -96,6 +96,15 @@ const signInForm = async (page) => {
   await page.locator('form button[type="submit"]').click()
 }
 const at = (path) => (url) => `${url.pathname}${url.search}${url.hash}` === path
+/** The password step link that continues to `next`, as /auth/callback builds it. */
+const passwordStep = (next) => `/auth/set-password?next=${encodeURIComponent(next)}`
+/** On the password step with this continuation; other parameters and the hash do not matter. */
+const onPasswordStep = (next) => (url) => url.pathname === '/auth/set-password' && url.searchParams.get('next') === next
+/** Waits until React has hydrated the element: before that a click on a submit button is a plain form GET. */
+const hydrated = (page, selector) => page.waitForFunction((sel) => {
+  const el = document.querySelector(sel)
+  return Boolean(el) && Object.keys(el).some((key) => key.startsWith('__reactProps'))
+}, selector)
 
 let server
 let browser
@@ -182,6 +191,96 @@ try {
     await context.close()
   }
   {
+    const backend = backendFor(smallSeed(), NEWBIE)
+    const { context, page } = await openPage(browser, backend)
+    await check('leaving the password page keeps the way on: other pages, another `?next=`, reopening it without `next`', async () => {
+      await page.goto(base + '/auth?next=' + encodeURIComponent('/?workspace=plan'))
+      await page.locator('#auth-email').fill('new@example.ru')
+      await page.getByRole('button', { name: 'Получить ссылку для входа' }).click()
+      await page.getByText('Ссылка для входа отправлена').waitFor()
+      await page.goto(emailLink(redirectTo(backend, 'otp'), NEWBIE, 'magiclink'))
+      const continuation = '/onboarding?next=%2F%3Fworkspace%3Dplan'
+      await page.waitForURL(at(passwordStep(continuation)))
+      // Another page: back to the step, with the step's own continuation.
+      await page.goto(base + '/projects/Q1?task=T1#plan')
+      await page.waitForURL(onPasswordStep(continuation))
+      // A `?next=` of another page does not replace it (here it would skip onboarding).
+      await page.goto(base + '/?next=' + encodeURIComponent('/projects/Q1'))
+      await page.waitForURL(onPasswordStep(continuation))
+      await page.goto(base + '/onboarding?next=' + encodeURIComponent('/listings'))
+      await page.waitForURL(onPasswordStep(continuation))
+      // A link in the site header (client-side navigation) is sent back as well.
+      await page.getByRole('navigation', { name: 'Основная навигация' }).getByRole('link', { name: 'Новости', exact: true }).click()
+      await page.waitForURL(onPasswordStep(continuation))
+      await page.getByPlaceholder('Минимум 8 символов').waitFor()
+      // Reopened without `next` (a bookmark, history): the kept continuation is used.
+      await page.goto(base + '/auth/set-password')
+      await page.getByPlaceholder('Минимум 8 символов').fill('new-password-4')
+      await page.getByPlaceholder('Повторите новый пароль').fill('new-password-4')
+      await page.getByRole('button', { name: 'Сохранить и продолжить' }).click()
+      await page.waitForURL(at(continuation))
+      const names = (await context.cookies(base)).map((cookie) => cookie.name)
+      assert.ok(!names.includes('pw_step_next') && !names.includes('needs_pw_setup'), `cleared after the password: ${names.join(',')}`)
+      await fillProfile(page)
+      await page.waitForURL(at('/projects/Q1#plan'), { timeout: 15000 })
+    })
+    await context.close()
+  }
+  {
+    const backend = backendFor(smallSeed(), USER)
+    const { context, page } = await openPage(browser, backend)
+    await check('recovery cannot be left without a new password: a new email from «Сброс пароля» keeps the step and the section', async () => {
+      await page.goto(base + '/auth?next=' + encodeURIComponent('/?workspace=team'))
+      await page.locator('#auth-email').fill('test@example.ru')
+      await page.getByRole('button', { name: 'Забыли пароль?' }).click()
+      await page.getByText('Письмо для сброса пароля отправлено').waitFor()
+      await page.goto(emailLink(redirectTo(backend, 'recover'), USER, 'recovery'))
+      const continuation = '/?workspace=team'
+      await page.waitForURL(at(passwordStep(continuation)))
+      // «Сброс пароля» is an /auth page and stays reachable; sending a new email there used to remove
+      // the recovery marker and let the person leave without a new password.
+      await page.goto(base + '/auth/reset-password')
+      await hydrated(page, 'form button[type="submit"]')
+      await page.getByPlaceholder('name@example.ru').fill('test@example.ru')
+      await page.getByRole('button', { name: 'Отправить ссылку' }).click()
+      await page.getByText('Проверьте почту').waitFor()
+      const link = redirectTo(backend, 'recover')
+      assert.equal(link, `${base}/auth/callback?type=recovery&next=%2F%3Fworkspace%3Dteam`, 'the new email continues to the same section')
+      await page.goto(base + '/projects/P1')
+      await page.waitForURL(onPasswordStep(continuation))
+      // The new email continues the same step.
+      await page.goto(emailLink(link, USER, 'recovery'))
+      await page.waitForURL(at(passwordStep(continuation)))
+      await page.getByPlaceholder('Минимум 8 символов').fill('new-password-5')
+      await page.getByPlaceholder('Повторите новый пароль').fill('new-password-5')
+      await page.getByRole('button', { name: 'Сохранить и продолжить' }).click()
+      await page.waitForURL(at('/listings/P1#members'), { timeout: 15000 })
+    })
+    await context.close()
+  }
+  {
+    const backend = backendFor(smallSeed(), USER)
+    const { context, page } = await openPage(browser, backend, { signed: false })
+    await check('signed out, an old recovery marker is still removed by «Сброс пароля» (pages are not blocked)', async () => {
+      await context.addCookies([{ name: 'needs_pw_reset', value: '1', url: base }, { name: 'pw_step_next', value: encodeURIComponent('/projects/P1'), url: base }])
+      await page.goto(base + '/news')
+      await page.waitForURL(onPasswordStep('/projects/P1'))
+      await page.getByText('Ссылка недействительна').waitFor()
+      await page.getByRole('link', { name: 'Запросить новую ссылку' }).click()
+      await page.waitForURL(at('/auth/reset-password'))
+      await hydrated(page, 'form button[type="submit"]')
+      await page.getByPlaceholder('name@example.ru').fill('test@example.ru')
+      await page.getByRole('button', { name: 'Отправить ссылку' }).click()
+      await page.getByText('Проверьте почту').waitFor()
+      assert.equal(redirectTo(backend, 'recover'), `${base}/auth/callback?type=recovery`)
+      const names = (await context.cookies(base)).map((cookie) => cookie.name)
+      assert.ok(!names.includes('needs_pw_reset') && !names.includes('pw_step_next'), names.join(','))
+      await page.goto(base + '/news')
+      await page.waitForURL(at('/news'))
+    })
+    await context.close()
+  }
+  {
     const backend = backendFor(smallSeed(), USER)
     const { context, page } = await openPage(browser, backend)
     await check('recovery: a new password first, then the chosen section', async () => {
@@ -233,6 +332,17 @@ try {
       await page.getByRole('button', { name: 'Сохранить и продолжить' }).click()
       await page.waitForURL(at('/profile'), { timeout: 15000 })
       assert.equal(new URL(page.url()).host, new URL(base).host)
+      // A crafted continuation cookie is refused too: no other site, no loop into /auth.
+      for (const value of ['https://evil.example', '//evil.example', '/\\evil.example', '/auth/set-password']) {
+        await context.addCookies([{ name: 'needs_pw_setup', value: '1', url: base }, { name: 'pw_step_next', value: encodeURIComponent(value), url: base }])
+        await page.goto(base + '/dashboard')
+        await page.waitForURL(at('/auth/set-password'))
+        await page.getByPlaceholder('Минимум 8 символов').fill('new-password-6')
+        await page.getByPlaceholder('Повторите новый пароль').fill('new-password-6')
+        await page.getByRole('button', { name: 'Сохранить и продолжить' }).click()
+        await page.waitForURL(at('/profile'), { timeout: 15000 })
+        assert.equal(new URL(page.url()).host, new URL(base).host, value)
+      }
     })
     await check('a destination in a project without access opens its public page instead', async () => {
       await page.goto(base + '/auth?next=' + encodeURIComponent('/projects/PX?task=T1#plan'))
@@ -340,6 +450,61 @@ try {
       await page.reload()
       await page.getByText('Проект не выбран').waitFor()
       assert.equal(await page.evaluate((id) => localStorage.getItem(`experts-current-project:${id}`), USER), null)
+    })
+    await context.close()
+  }
+  {
+    const backend = backendFor(bigSeed(), USER, { strictQueries: true })
+    const { context, page } = await openPage(browser, backend, { signed: true })
+    await check('picker in English: labels, search, errors and the close button come from the translations', async () => {
+      await page.goto(base + '/')
+      await page.locator('#site-language').selectOption('en')
+      await page.getByText('No project selected').waitFor()
+      await page.getByRole('button', { name: /Work plan/ }).click()
+      const dialog = page.getByRole('dialog', { name: 'Work plan: choose a project' })
+      await dialog.waitFor()
+      const section = (kind) => dialog.locator(`[data-section="${kind}"]`)
+      await section('owned').locator('.project-picker-item').nth(PAGE - 1).waitFor()
+      await section('member').locator('.project-picker-item').nth(PAGE - 1).waitFor()
+      // Interface text without Cyrillic; project titles are user content and keep their language.
+      const russian = () => dialog.evaluate((node) => {
+        const copy = node.cloneNode(true)
+        copy.querySelectorAll('.project-picker-title').forEach((title) => title.remove())
+        const labels = [...copy.querySelectorAll('[aria-label]')].map((el) => el.getAttribute('aria-label'))
+        return [copy.textContent, ...labels].join(' ').match(/[А-Яа-яЁё][^]{0,30}/g)
+      })
+      assert.equal(await russian(), null)
+      assert.match(await section('owned').locator('h3').textContent(), /^My projects/)
+      assert.match(await section('member').locator('h3').textContent(), /^Taking part/)
+      assert.ok(await dialog.getByText('Opens the project tasks, calendar and Gantt chart.').isVisible())
+      assert.equal(await dialog.getByRole('button', { name: 'Show more' }).count(), 2)
+      assert.ok(await section('owned').getByText('You are the author').first().isVisible())
+      assert.ok(await section('member').getByText('You are a member').first().isVisible())
+      assert.ok(await dialog.getByRole('button', { name: 'Close', exact: true }).isVisible())
+      await settle(page); await page.screenshot({ path: `${out}/picker-en-1440.png` })
+
+      await dialog.getByLabel('Search by title').fill('Чужой проект')
+      await section('owned').getByText('No matches.').waitFor()
+      await dialog.getByText('Found: 52').waitFor()
+      assert.equal(await russian(), null)
+
+      // Errors: closing after a search reloads both lists; both requests fail.
+      backend.failures.push({ method: 'GET', table: 'listings', status: 500, message: 'temporary failure' })
+      backend.failures.push({ method: 'GET', table: 'applications', status: 500, message: 'temporary failure' })
+      await dialog.getByRole('button', { name: 'Close', exact: true }).click()
+      await page.getByRole('button', { name: 'Choose', exact: true }).click()
+      const choose = page.getByRole('dialog', { name: 'Choose a project' })
+      await choose.getByText('The home page shortcuts will open this project.').waitFor()
+      for (const kind of ['owned', 'member']) {
+        await choose.locator(`[data-section="${kind}"]`).getByRole('alert').filter({ hasText: 'Could not load projects. Check your connection and try again.' }).waitFor()
+      }
+      assert.equal(await choose.evaluate((node) => node.textContent.match(/[А-Яа-яЁё][^]{0,30}/g)), null)
+      await settle(page); await page.screenshot({ path: `${out}/picker-en-error-1440.png` })
+      for (const kind of ['owned', 'member']) await choose.locator(`[data-section="${kind}"]`).getByRole('button', { name: 'Retry' }).click()
+      await choose.locator('[data-section="member"] .project-picker-item').nth(PAGE - 1).waitFor()
+      await choose.locator('[data-section="owned"] .project-picker-item').first().click()
+      await page.getByText('Project: Мой проект 01').waitFor()
+      assert.ok(await page.getByRole('button', { name: 'Change', exact: true }).isVisible())
     })
     await context.close()
   }

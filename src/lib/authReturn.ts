@@ -71,3 +71,49 @@ export function nextStepAfterSignIn(hasProfile: boolean, destination: string | n
   if (!hasProfile) return safe ? `/onboarding?next=${encodeURIComponent(safe)}` : '/onboarding'
   return safe || '/profile'
 }
+
+// Mandatory password step: a new password after a first magic link or invite, or after recovery.
+// While the `needs_pw_setup` / `needs_pw_reset` marker is set, src/proxy.ts sends every page except
+// /auth* to /auth/set-password. Where the person continues after the password (onboarding or the
+// destination) is kept in a cookie with the marker's lifetime, so leaving the page, reloading it or
+// visiting other /auth pages does not lose it. The cookie is a convenience, not an access right:
+// every reader accepts only a same-site path outside the sign-in flow (safeInternalPath).
+export const PASSWORD_STEP_COOKIE = 'pw_step_next'
+const PASSWORD_STEP_MAX_AGE_S = 1800
+
+/** The password step page that continues to `next` afterwards. */
+export function passwordStepHref(next: string | null): string {
+  const safe = safeInternalPath(next)
+  return safe ? `/auth/set-password?next=${encodeURIComponent(safe)}` : '/auth/set-password'
+}
+
+/** Keeps where to continue after the password step; `null` removes it. */
+export function rememberPasswordStep(next: string | null) {
+  if (typeof document === 'undefined') return
+  const safe = safeInternalPath(next)
+  document.cookie = safe
+    ? `${PASSWORD_STEP_COOKIE}=${encodeURIComponent(safe)}; Path=/; Max-Age=${PASSWORD_STEP_MAX_AGE_S}; SameSite=Lax`
+    : `${PASSWORD_STEP_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`
+}
+
+/** The kept continuation of the password step, or null when missing, malformed or unsafe. */
+export function readPasswordStep(): string | null {
+  if (typeof document === 'undefined') return null
+  const prefix = `${PASSWORD_STEP_COOKIE}=`
+  const entry = document.cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith(prefix))
+  if (!entry) return null
+  try {
+    return safeInternalPath(decodeURIComponent(entry.slice(prefix.length)))
+  } catch {
+    return null
+  }
+}
+
+/** The final destination behind a continuation: `/onboarding?next=X` gives X. */
+export function destinationOfStep(step: string | null): string | null {
+  const safe = safeInternalPath(step)
+  if (!safe) return null
+  const url = new URL(safe, BASE)
+  if (url.pathname === '/onboarding') return safeReturnPath(url.searchParams.get('next'))
+  return safeReturnPath(safe)
+}

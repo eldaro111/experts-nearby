@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
-import { nextStepAfterSignIn, safeReturnPath, takePendingReturn } from '@/lib/authReturn'
+import { nextStepAfterSignIn, passwordStepHref, rememberPasswordStep, safeReturnPath, takePendingReturn } from '@/lib/authReturn'
 import { resolveAccessibleDestination } from '@/lib/projectAccess'
 
 function getHashParams() {
@@ -129,26 +129,27 @@ export default function AuthCallbackPage() {
             )
           }
 
+          // The new password comes first; set-password then opens onboarding or the destination.
+          // The continuation is kept with the marker, so leaving the password page does not lose it.
+          const nextPath = nextStepAfterSignIn(Boolean(profile), destination)
+          rememberPasswordStep(nextPath)
+
           document.cookie =
             'needs_pw_reset=1; Path=/; Max-Age=1800; SameSite=Lax'
 
-          // The new password comes first; set-password then opens onboarding or the destination.
-          const nextPath = nextStepAfterSignIn(Boolean(profile), destination)
-
-          router.replace(
-            `/auth/set-password?next=${encodeURIComponent(nextPath)}`
-          )
+          router.replace(passwordStepHref(nextPath))
           return
         }
 
         if (!profile) {
           if (type === 'magiclink' || type === 'invite') {
+            const nextPath = nextStepAfterSignIn(false, destination)
+            rememberPasswordStep(nextPath)
+
             document.cookie =
               'needs_pw_setup=1; Path=/; Max-Age=1800; SameSite=Lax'
 
-            router.replace(
-              `/auth/set-password?next=${encodeURIComponent(nextStepAfterSignIn(false, destination))}`
-            )
+            router.replace(passwordStepHref(nextPath))
             return
           }
 

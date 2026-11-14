@@ -8,6 +8,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { safeInternalPath } from '@/lib/safeRedirect'
+import { readPasswordStep, rememberPasswordStep } from '@/lib/authReturn'
 import { resolveAccessibleDestination } from '@/lib/projectAccess'
 
 type AccessState = 'checking' | 'allowed' | 'denied'
@@ -93,10 +94,10 @@ function SetPasswordContent() {
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
-  const nextPath = useMemo(() => {
+  const linkNext = useMemo(() => {
     // Только путь этого сайта: без `//host`, `/\host`, схем и без возврата в /auth (нет циклов).
     // Здесь допустим /onboarding?next=… — онбординг идёт после установки пароля.
-    return safeInternalPath(searchParams.get('next')) || '/profile'
+    return safeInternalPath(searchParams.get('next'))
   }, [searchParams])
 
   useEffect(() => {
@@ -161,6 +162,7 @@ function SetPasswordContent() {
       'needs_pw_setup=; Path=/; Max-Age=0; SameSite=Lax'
     document.cookie =
       'needs_pw_reset=; Path=/; Max-Age=0; SameSite=Lax'
+    rememberPasswordStep(null)
   }
 
   const handleSetPassword = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -189,6 +191,9 @@ function SetPasswordContent() {
 
       if (error) throw error
 
+      // The link's `next`; without it (the page was left and opened again) the continuation kept
+      // by /auth/callback for this step. Read before clearLocks removes it.
+      const nextPath = linkNext || readPasswordStep() || '/profile'
       clearLocks()
       router.replace(userId ? await resolveAccessibleDestination(nextPath, userId) : nextPath)
       router.refresh()

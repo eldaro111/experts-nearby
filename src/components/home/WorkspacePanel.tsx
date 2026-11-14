@@ -358,7 +358,7 @@ export function WorkspacePanel() {
         open={dialog !== null}
         onClose={closeDialog}
         className="project-picker"
-        title={t(dialogDestination ? `${dialogDestination.title}: выберите проект` : 'Выберите проект')}
+        title={dialogDestination ? `${t(dialogDestination.title)}: ${t('выберите проект')}` : t('Выберите проект')}
         description={t(dialogDestination ? dialogDestination.pickerHint : 'Быстрые переходы на главной будут открывать этот проект.')}
       >
         {noProjects ? (
