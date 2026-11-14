@@ -172,6 +172,16 @@ export function createBackend(tables, { userId, email = 'test@example.ru', rpc =
           if (strictQueries && value.startsWith('ilike.')) {
             if (row[key] === null || row[key] === undefined || !likeRegExp(value.slice(6)).test(String(row[key]))) return false
           }
+          const range = strictQueries && /^(lt|lte|gt|gte)\.(.*)$/.exec(value)
+          if (range) {
+            const [, op, raw] = range
+            const actual = row[key]
+            if (actual === null || actual === undefined) return false
+            const asTime = (v) => (/^\d{4}-\d{2}-\d{2}T/.test(String(v)) ? new Date(v).getTime() : NaN)
+            const x = Number.isNaN(asTime(actual)) ? actual : asTime(actual)
+            const y = Number.isNaN(asTime(raw)) ? raw : asTime(raw)
+            if (!(op === 'lt' ? x < y : op === 'lte' ? x <= y : op === 'gt' ? x > y : x >= y)) return false
+          }
         }
         return true
       }
@@ -193,6 +203,10 @@ export function createBackend(tables, { userId, email = 'test@example.ru', rpc =
       } else if (method === 'POST') {
         const body = req.postDataJSON()
         const items = (Array.isArray(body) ? body : [body]).map((item) => ({ id: `${table}-${rows.length + 1}`, created_at: new Date().toISOString(), ...item }))
+        // Primary keys are unique in PostgreSQL; opt-in so suites written for the simpler mock keep working.
+        if (strictQueries && items.some((item) => rows.some((row) => row.id === item.id))) {
+          return route.fulfill({ status: 409, headers, contentType: 'application/json', body: JSON.stringify({ code: '23505', message: 'duplicate key value violates unique constraint', details: null, hint: null }) })
+        }
         rows.push(...items)
         data = structuredClone(items)
       } else if (method === 'DELETE') {
