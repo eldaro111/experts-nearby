@@ -38,6 +38,10 @@ export function useT() {
   const { locale } = useContext(Context)
   return (text: string) => (locale === 'en' ? english[text] || text : text)
 }
+/** Interface language, e.g. for date and number formatting. */
+export function useLocale(): Locale {
+  return useContext(Context).locale
+}
 export function UiText({ text }: { text: string }) {
   const t = useT()
   return <>{t(text)}</>

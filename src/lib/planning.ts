@@ -615,7 +615,7 @@ export const editTaskPlanning = (db: PlanningDb, taskId: string, expectedVersion
 
 export function reorderBacklog(db: PlanningDb, projectId: string, expectedVersion: number, taskIds: string[], options?: CallOptions): Promise<Result<Backlog>> {
   if (taskIds.length > MAX_BACKLOG || new Set(taskIds).size !== taskIds.length) {
-    return Promise.resolve({ ok: false, error: { kind: 'rule', code: 'client', message: `Порядок можно сохранить для не более чем ${MAX_BACKLOG} уникальных задач.` } })
+    return Promise.resolve({ ok: false, error: { kind: 'rule', code: 'client', message: 'Порядок можно сохранить для не более чем 5000 уникальных задач.' } })
   }
   return call(db, 'reorder_project_backlog', { p_project_id: projectId, p_expected_version: expectedVersion, p_task_ids: taskIds }, (data) => parseBacklog(single(data)), options)
 }
@@ -634,7 +634,7 @@ export const updateSprint = (db: PlanningDb, sprintId: string, expectedVersion: 
 
 export function addTasksToSprint(db: PlanningDb, sprintId: string, expectedVersion: number, tasks: { task_id: string; expected_version: number }[], options?: CallOptions): Promise<Result<Sprint>> {
   if (tasks.length === 0 || tasks.length > MAX_BACKLOG) {
-    return Promise.resolve({ ok: false, error: { kind: 'rule', code: 'client', message: `Выберите от 1 до ${MAX_BACKLOG} задач.` } })
+    return Promise.resolve({ ok: false, error: { kind: 'rule', code: 'client', message: 'Выберите от 1 до 5000 задач.' } })
   }
   return call(db, 'add_tasks_to_sprint', { p_sprint_id: sprintId, p_expected_version: expectedVersion, p_tasks: tasks }, (data) => parseSprint(single(data)), options)
 }
@@ -673,7 +673,7 @@ export function parsePlannedHours(input: string): Check<number | null> {
   if (!text) return { ok: true, value: null }
   if (!/^\d{1,4}(\.\d{1,2})?$/.test(text)) return { ok: false, message: 'Плановые часы: число больше 0, не более двух знаков после запятой.' }
   const value = Number(text)
-  if (!(value > 0) || value > MAX_PLANNED_HOURS) return { ok: false, message: `Плановые часы: больше 0 и не более ${MAX_PLANNED_HOURS}.` }
+  if (!(value > 0) || value > MAX_PLANNED_HOURS) return { ok: false, message: 'Плановые часы: больше 0 и не более 2000.' }
   return { ok: true, value }
 }
 
@@ -687,7 +687,7 @@ export function parseWipLimit(input: string): Check<number | null> {
 export function checkSprintDraft(draft: SprintDraft): string | null {
   const name = draft.name.trim()
   if (!name || name.length > 120) return 'Название спринта: от 1 до 120 символов.'
-  if (draft.goal.length > SPRINT_GOAL_MAX) return `Цель спринта: не более ${SPRINT_GOAL_MAX} символов.`
+  if (draft.goal.length > SPRINT_GOAL_MAX) return 'Цель спринта: не более 4000 символов.'
   const start = draft.start_at ? new Date(draft.start_at).getTime() : null
   const end = draft.end_at ? new Date(draft.end_at).getTime() : null
   if ((start !== null && Number.isNaN(start)) || (end !== null && Number.isNaN(end))) return 'Некорректная дата спринта.'
@@ -705,7 +705,7 @@ export function startBlocker(sprint: Sprint, scopeSize: number, hasActive: boole
 }
 
 export function checkCloseReason(cancel: boolean, reason: string): string | null {
-  if (reason.length > REASON_MAX) return `Причина: не более ${REASON_MAX} символов.`
+  if (reason.length > REASON_MAX) return 'Причина: не более 2000 символов.'
   if (cancel && !reason.trim()) return 'Для отмены спринта укажите причину.'
   return null
 }
@@ -827,6 +827,9 @@ export function sumEstimates(tasks: { story_points: number | null; planned_hours
   }
   return { tasks: tasks.length, story_points: points, planned_hours: hours, unestimated_points: unestimatedPoints, unestimated_hours: unestimatedHours }
 }
+
+/** Moment a write was sent; used to recognise its own result when the answer was lost. */
+export const requestMoment = () => Date.now()
 
 /** datetime-local value (device zone) → ISO; empty → null. */
 export function fromLocalInput(value: string): string | null {
