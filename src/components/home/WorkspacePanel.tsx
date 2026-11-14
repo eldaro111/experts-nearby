@@ -86,9 +86,49 @@ type Overview = {
 }
 
 export function WorkspacePanel() {
+  const identity = useRef<{ userId: string | null | undefined; generation: number }>({ userId: undefined, generation: 0 })
+  const [session, setSession] = useState<{ auth: AuthState; generation: number }>({ auth: { status: 'loading' }, generation: 0 })
+  const isCurrentSession = useCallback((generation: number) => identity.current.generation === generation, [])
+
+  useEffect(() => {
+    let active = true
+    let receivedAuthEvent = false
+    const apply = (id: string | undefined) => {
+      const userId = id ?? null
+      if (!active || identity.current.userId === userId) return
+      const generation = identity.current.generation + 1
+      // Invalidate callbacks synchronously, before React mounts the next user's panel.
+      identity.current = { userId, generation }
+      setSession({ auth: userId ? { status: 'user', userId } : { status: 'guest' }, generation })
+    }
+    const { data } = supabase.auth.onAuthStateChange((_event, next) => {
+      receivedAuthEvent = true
+      apply(next?.user?.id)
+    })
+    void supabase.auth.getSession().then(({ data }) => {
+      // An initial read must not overwrite a newer sign-out/sign-in notification.
+      if (!receivedAuthEvent) apply(data.session?.user?.id)
+    })
+    return () => {
+      active = false
+      identity.current = { userId: undefined, generation: identity.current.generation + 1 }
+      data.subscription.unsubscribe()
+    }
+  }, [])
+
+  // A session change discards lists, selection, dialog, searches, errors and loading
+  // together. The generation also distinguishes A -> signed out -> A.
+  return <WorkspaceSession key={session.generation} auth={session.auth} generation={session.generation} isCurrentSession={isCurrentSession} />
+}
+
+function WorkspaceSession({ auth, generation, isCurrentSession }: {
+  auth: AuthState
+  generation: number
+  isCurrentSession: (generation: number) => boolean
+}) {
   const t = useT()
   const router = useRouter()
-  const [auth, setAuth] = useState<AuthState>({ status: 'loading' })
+  const isCurrent = useCallback(() => isCurrentSession(generation), [generation, isCurrentSession])
   const [sections, setSections] = useState<Record<Kind, Section>>({ owned: SECTION, member: SECTION })
   const [overview, setOverview] = useState<Overview | null>(null)
   const [current, setCurrent] = useState<MyProject | null>(null)
@@ -98,18 +138,19 @@ export function WorkspacePanel() {
   const [activeQuery, setActiveQuery] = useState('')
   // Each section answers only its latest request; older answers (previous search) are dropped.
   const tokens = useRef<Record<Kind, number>>({ owned: 0, member: 0 })
-  const overviewPromise = useRef<Promise<Overview> | null>(null)
+  const overviewPromise = useRef<Promise<Overview | null> | null>(null)
 
   const userId = auth.status === 'user' ? auth.userId : null
 
   const loadSection = useCallback(async (kind: Kind, user: string, offset: number, text: string) => {
+    if (!isCurrent()) return null
     const token = (tokens.current[kind] += 1)
     setSections((all) => ({
       ...all,
       [kind]: offset === 0 ? { ...SECTION, loading: true } : { ...all[kind], loading: true, error: null, failedOffset: null },
     }))
     const page = await LOADERS[kind](user, { offset, query: text })
-    if (token !== tokens.current[kind]) return null
+    if (!isCurrent() || token !== tokens.current[kind]) return null
     if (page.error) logAppError('Ошибка загрузки проектов для главной страницы', page.error)
     setSections((all) => {
       const before = all[kind]
@@ -119,17 +160,19 @@ export function WorkspacePanel() {
       return { ...all, [kind]: section }
     })
     return page
-  }, [])
+  }, [isCurrent])
 
   // First pages without a filter, plus a check of the remembered project.
   const loadOverview = useCallback((user: string) => {
-    const run = async (): Promise<Overview> => {
+    const run = async (): Promise<Overview | null> => {
+      if (!isCurrent()) return null
       const remembered = readCurrentProjectId(user)
       const [owned, member, checked] = await Promise.all([
         loadSection('owned', user, 0, ''),
         loadSection('member', user, 0, ''),
         remembered ? loadAccessibleProject(user, remembered) : Promise.resolve({ project: null, error: null }),
       ])
+      if (!isCurrent()) return null
       // A remembered project that is no longer available is forgotten, not replaced by another one.
       if (remembered && !checked.error && !checked.project) rememberCurrentProject(user, null)
       const failed = !owned || !member || Boolean(owned.error || member.error)
@@ -148,19 +191,7 @@ export function WorkspacePanel() {
     }
     overviewPromise.current = run()
     return overviewPromise.current
-  }, [loadSection])
-
-  useEffect(() => {
-    let active = true
-    const apply = (id: string | undefined) => {
-      if (!active) return
-      setAuth((before) => (before.status === 'user' && before.userId === id ? before : id ? { status: 'user', userId: id } : { status: 'guest' }))
-      if (!id) { setOverview(null); setCurrent(null); overviewPromise.current = null }
-    }
-    supabase.auth.getSession().then(({ data }) => apply(data.session?.user?.id))
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => apply(session?.user?.id))
-    return () => { active = false; data.subscription.unsubscribe() }
-  }, [])
+  }, [loadSection, isCurrent])
 
   // Deferred to a timer: loading starts after this render, not synchronously inside the effect.
   useEffect(() => {
@@ -170,13 +201,13 @@ export function WorkspacePanel() {
   }, [userId, loadOverview])
 
   const choose = useCallback((project: MyProject) => {
-    if (!userId) return
+    if (!userId || !isCurrent()) return
     rememberCurrentProject(userId, project.id)
     setCurrent(project)
-  }, [userId])
+  }, [userId, isCurrent])
 
   const open = useCallback(async (destination: Destination) => {
-    if (auth.status === 'loading' || pending) return
+    if (!isCurrent() || auth.status === 'loading' || pending) return
     if (auth.status === 'guest') {
       // After sign-in (and, for new accounts, onboarding) the person returns here and the same shortcut continues.
       router.push(signInHref(`/?workspace=${destination}`))
@@ -184,6 +215,7 @@ export function WorkspacePanel() {
     }
     setPending(destination)
     const known = await (overviewPromise.current ?? loadOverview(auth.userId))
+    if (!isCurrent() || !known) return
     setPending(null)
     // The only project needs no choice; several projects need an explicit one. Nothing is chosen at random.
     const target = current ?? known.current ?? known.single
@@ -193,7 +225,7 @@ export function WorkspacePanel() {
       return
     }
     setDialog({ destination })
-  }, [auth, pending, current, loadOverview, choose, router])
+  }, [auth, pending, current, loadOverview, choose, router, isCurrent])
 
   // Return from sign-in: /?workspace=plan continues the shortcut once, then the parameter is removed.
   const resumed = useRef(false)
